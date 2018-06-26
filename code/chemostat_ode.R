@@ -19,11 +19,11 @@ chemostat <- function(t,current,params){
     dN <- mu * R * N - D * N - prob_spor * N + prob_actv * Sp3
     
     # Sporulation takes 3 time steps. modeled as 3 population maturig through the process
-    dSp1 <- prob_spor * N - Sp1
+    dSp1 <- prob_spor * N - Sp1 - D*Sp1
     
-    dSp2 <- Sp1 - Sp2
+    dSp2 <- Sp1 - Sp2 - D*Sp2
     
-    dSp3 <- Sp2 - prob_actv * Sp3
+    dSp3 <- Sp2 - prob_actv * Sp3 - D*Sp3
     
 
     results <- c(dR, dN, dSp1, dSp1, dSp3)
@@ -35,15 +35,15 @@ chemostat <- function(t,current,params){
 
 ###define parameters
 # resource in inflow
-R_in <- 1000
+R_in <- 1e6
 #dilution rate
 D <- 2
 # growth rate
 mu <- 2
 # probaility of sporulation
-prob_spor <- 0.001
+prob_spor <- 0.01
 #probability of reactivation of spores
-prob_actv <- 0.001
+prob_actv <- 0.01
 
 # all parameters together
 params <- c(R_in, D, mu, prob_spor, prob_actv)
