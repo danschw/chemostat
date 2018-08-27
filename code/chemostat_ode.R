@@ -7,9 +7,42 @@ pd=par()
 library(deSolve)
 library(ggplot2)
 
-## Model with multi stage sporulation
+## Models with multi stage sporulation
 #Define system of differential equations for resource and bacteria
-chemostat <- function(t,current,params){
+chemostat1 <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * N 
+    
+    #N are the bacteria 
+    dN <- mu * R * N - D * N - prob_spor * N + prob_actv * S
+    #S are the spores 
+    dS <- prob_spor * N - prob_actv * S - D*S
+    
+    results <- c(dR, dN, dS)
+    return (list(results))
+  })
+}
+chemostat3 <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * N 
+    
+    #N are the bacteria 
+    dN <- mu * R * N - D * N - prob_spor * N + prob_actv * S
+    
+    # Sporulation takes 3 time steps. modeled as 3 population maturing through the process
+    dI1 <- prob_spor * N - I1 - D*I1
+    dI2 <- I1  - I2 - D*I2
+    dS <- I2 - prob_actv * S - D*S
+    
+    results <- c(dR, dN, dI1, dI2, dS)
+    return (list(results))
+  })
+}
+chemostat6 <- function(t,current,params){
   with(as.list(c(params,current)), {
     #list the equations for the derivatives of each state variable
     #R is the resource
@@ -19,28 +52,48 @@ chemostat <- function(t,current,params){
     dN <- mu * R * N - D * N - prob_spor * N + prob_actv * S
     
     # Sporulation takes 6 time steps. modeled as 6 population maturig through the process
-    dSp1 <- prob_spor * N - Sp1 - D*Sp1
+    dI1 <- prob_spor * N - I1 - D*I1
+    dI2 <- I1  - I2 - D*I2
+    dI3 <- I2 - I3 - D*I3
+    dI4 <- I3 - I4 - D*I4
+    dI5 <- I4 - I5 - D*I5
+    dS <- I5 - prob_actv * S - D*S
     
-    dSp2 <- Sp1  - Sp2 - D*Sp2
-    dSp3 <- Sp2 - Sp3 - D*Sp3
-    dSp4 <- Sp3 - Sp4 - D*Sp4
-    dSp5 <- Sp4 - Sp5 - D*Sp5
-
-    dS <- Sp5 - prob_actv * S - D*S
-    
-
-    results <- c(dR, dN, dSp1, dSp2,dSp3,dSp4,dSp5, dS)
+    results <- c(dR, dN, dI1, dI2,dI3,dI4,dI5, dS)
     return (list(results))
   })
 }
-
+chemostat9 <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * N 
+    
+    #N are the bacteria 
+    dN <- mu * R * N - D * N - prob_spor * N + prob_actv * S
+    
+    # Sporulation takes 9 time steps. modeled as 9 population maturing through the process
+    dI1 <- prob_spor * N - I1 - D*I1
+    dI2 <- I1 - I2 - D*I2
+    dI3 <- I2 - I3 - D*I3
+    dI4 <- I3 - I4 - D*I4
+    dI5 <- I4 - I5 - D*I5
+    dI6 <- I5 - I6 - D*I6
+    dI7 <- I6 - I7 - D*I7
+    dI8 <- I7 - I8 - D*I8
+    dS  <- I8 - prob_actv * S - D*S
+    
+    results <- c(dR, dN, dI1, dI2,dI3,dI4,dI5,dI6, dI7, dI8, dS)
+    return (list(results))
+  })
+}
 
 
 ###define parameters
 # resource in inflow
 R_in <- 1e6
 #dilution rate
-D <- 0.3
+D <- 0.01
 # growth rate
 mu <- D
 # probaility of sporulation
@@ -52,20 +105,27 @@ prob_actv <- 0.01
 params <- c(R_in, D, mu, prob_spor, prob_actv)
 
 #declare initial conditions for state variables
-current0 <- c(R = R_in, N = 100, Sp1=1, Sp2=1,Sp3=1, Sp4=1,Sp5=1,S=1)
+current1 <- c(R = R_in, N = 100, S=1)
+current3 <- c(R = R_in, N = 100, I1=1, I2=1,S=1)
+current6 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,S=1)
+current9 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,I6=1, I7=1,I8=1,S=1)
 
 #define the time to run model
-t <- seq (0, 200, by=1)
+t <- seq (0, 500, by=1)
 
 #solve the model and save the output
-out <- lsoda(current0, t, chemostat, params)
-
+out <- lsoda(current1, t, chemostat1, params)
+plot (out)
+out <- lsoda(current3, t, chemostat3, params)
+plot (out)
+out <- lsoda(current6, t, chemostat6, params)
+plot (out)
+out <- lsoda(current9, t, chemostat9, params)
 plot (out)
 
 
-
 library(tidyr)
-out.l <- gather(as.data.frame(out), key='population', value='Conc', c("R","N","Sp1","Sp2","Sp3","Sp4","Sp5","S"))
+out.l <- gather(as.data.frame(out), key='population', value='Conc', c("R","N","I1","I2","I3","I4","I5","S"))
 # ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
 ggplot(out.l, aes(x=time, y=Conc))+
   geom_line(aes(color=population))+
@@ -74,7 +134,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
   scale_colour_brewer(palette='Set1')
 
 rel <- as.data.frame(out)
-rel$all <- apply(X = rel[,3:9],MARGIN = 1,FUN = sum)
+rel$all <- apply(X = rel[,3:ncol(rel)],MARGIN = 1,FUN = sum)
 rel$rel <- rel$S/rel$all
 qplot(data=rel, x=time, y=rel)+geom_line()
 
@@ -99,24 +159,79 @@ current0 <- c(R = R_in, N = 100, Sp1=1, Sp2=1,Sp3=1, Sp4=1,Sp5=1,S=1)
 t <- seq (0, 500, by=1)
 
 
-d.rates <- data.frame(rates=c(0.01,0.03,0.06,0.09,0.15,0.3,0.6,0.9,1), ratio=NA)
+d.rates <- data.frame(dilution=rep(c(0.01,0.03,0.06,0.09,0.15,0.3,0.6,0.9,1),4), 
+                      spo.time= as.numeric(rep(c(1,3,6,9),each=9)),ratio=NA, N=NA, S=NA)
 
-for (i in d.rates$rates){
+for (i in 1:nrow(d.rates)){
   #dilution rate
-  D <- i
+  D <- d.rates$dilution[i]
+  mu <- D
   # all parameters together
   params <- c(R_in, D, mu, prob_spor, prob_actv)
-  #solve the model and save the output
-  out <- lsoda(current0, t, chemostat, params)
-  rel <- as.data.frame(out)
-  rel$all <- apply(X = rel[,3:9],MARGIN = 1,FUN = sum)
-  rel$rel <- rel$S/rel$all
-  d.rates$ratio[d.rates$rates==i] <- rel$rel[length(rel$rel)]
-}
-
-qplot(data=d.rates, x=rates, y=ratio)+geom_line()+
-  # scale_y_log10(breaks=c(0.1,0.01, 0.001,0.0001))+
-  ylab("spore frequency")+
-  xlab("Dilution rate (hr^-1)")+ theme_bw()+
-  annotation_logticks(sides = 'l')
+  t.spo <- d.rates$spo.time[i]
+  if (t.spo==1){
+    current1 <- c(R = R_in, N = 100, S=1)
+    out <- lsoda(current1, t, chemostat1, params)
   
+    } else if (t.spo==3){
+    current3 <- c(R = R_in, N = 100, I1=1, I2=1,S=1)
+    out <- lsoda(current3, t, chemostat3, params)
+  
+    } else if (t.spo==6){
+    current6 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,S=1)
+    out <- lsoda(current6, t, chemostat6, params)
+  
+    } else if (t.spo==9){
+    current9 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,I6=1, I7=1,I8=1,S=1)
+    out <- lsoda(current9, t, chemostat9, params)
+  
+    }
+
+  rel <- as.data.frame(out)
+  rel$all <- apply(X = rel[,3:ncol(rel)],MARGIN = 1,FUN = sum)
+  rel$rel <- rel$S/rel$all
+  d.rates$ratio[i] <- rel$rel[nrow(rel)]
+  d.rates$N[i] <- rel$N[nrow(rel)]
+  d.rates$S[i] <- rel$S[nrow(rel)]
+}
+p1 <- 
+  ggplot(d.rates, aes(x=dilution, y=ratio))+
+    geom_line(aes(color=as.factor(spo.time)),size=1)+
+    geom_point(aes(shape=as.factor(spo.time),color=as.factor(spo.time)),size=3)+
+    scale_color_discrete(name="Sporulation time")+
+    scale_shape_discrete(name="Sporulation time")+
+    scale_y_log10(breaks=c(1e-1,1e-2,1e-3,1e-4))+
+    ylab("spore frequency (log)")+
+    xlab("Dilution rate (hr^-1)")+ theme_bw()+
+    theme(legend.position = "bottom")+
+    annotation_logticks(sides = 'l')+
+    ggtitle("spore frequency")
+
+p2 <- 
+  ggplot(d.rates, aes(x=dilution, y=S))+
+    geom_line(aes(color=as.factor(spo.time)),size=1)+
+    geom_point(aes(shape=as.factor(spo.time),color=as.factor(spo.time)),size=3)+
+    scale_color_discrete(name="Sporulation time")+
+    scale_shape_discrete(name="Sporulation time")+
+    scale_y_log10(limits=c(1e1,1e6))+
+    ylab("Spore conc. (log)")+
+    xlab("Dilution rate (hr^-1)")+ theme_bw()+
+    theme(legend.position = "bottom")+
+    annotation_logticks(sides = 'l')+
+    ggtitle("Spore concentration")
+p3 <- 
+  ggplot(d.rates, aes(x=dilution, y=N))+
+    geom_line(aes(color=as.factor(spo.time)),size=1)+
+    geom_point(aes(shape=as.factor(spo.time),color=as.factor(spo.time)),size=3)+
+    scale_color_discrete(name="Sporulation time")+
+    scale_shape_discrete(name="Sporulation time")+
+    scale_y_log10(limits=c(1e1,1e6))+ 
+    ylab("Vegetative cell conc.")+
+    xlab("Dilution rate (hr^-1)")+ theme_bw()+
+    theme(legend.position = "bottom")+
+    annotation_logticks(sides = 'l')+
+    ggtitle("Vegetative cell concentration")
+
+library(gridExtra)
+grid.arrange(p1,p2,p3,nrow=1)
+
