@@ -122,6 +122,7 @@ d.rates <- data.frame(dilution=rep(c(0.01,0.03,0.06,0.09,0.15,0.3,0.6,0.9,1),10)
 for (i in 1:nrow(d.rates)){
   #dilution rate
   D <- d.rates$dilution[i]
+  mu <- D
   t.spo <- d.rates$spo.time[i]
   # all parameters together
   params <- c(R_in, D, mu, t.spo, prob_spor, prob_actv)
