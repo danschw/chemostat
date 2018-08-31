@@ -139,9 +139,9 @@ params1v <- c(R_in, D, mu, prob_spor, prob_actv, loss, ads, burst)
 #declare initial conditions for state variables
 current1 <- c(R = R_in, N = 1e5, Nmut=0, S=0)
 current1v <- c(R = R_in, N = 1e5, Nmut=0, S=0, V=1)
-current3 <- c(R = R_in, N = 100, I1=1, I2=1,S=1)
-current6 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,S=1)
-current9 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,I6=1, I7=1,I8=1,S=1)
+# current3 <- c(R = R_in, N = 100, I1=1, I2=1,S=1)
+# current6 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,S=1)
+# current9 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,I6=1, I7=1,I8=1,S=1)
 
 #define the time to run model
 t <- seq (0, 5000, by=1)
@@ -151,12 +151,12 @@ out <- lsoda(current1, t, chemostat1, params1)
 plot (out)
 out <- lsoda(current1v, t, chemostat1v, params1v)
 plot (out)
-out <- lsoda(current3, t, chemostat3, params)
-plot (out)
-out <- lsoda(current6, t, chemostat6, params)
-plot (out)
-out <- lsoda(current9, t, chemostat9, params)
-plot (out)
+# out <- lsoda(current3, t, chemostat3, params)
+# plot (out)
+# out <- lsoda(current6, t, chemostat6, params)
+# plot (out)
+# out <- lsoda(current9, t, chemostat9, params)
+# plot (out)
 
 
 out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
@@ -167,105 +167,112 @@ ggplot(out.l, aes(x=time, y=Conc))+
   theme_bw()+
   scale_colour_brewer(palette='Set1')
 
-rel <- as.data.frame(out)
-rel$all <- apply(X = rel[,3:ncol(rel)],MARGIN = 1,FUN = sum)
-rel$rel <- rel$S/rel$all
-qplot(data=rel, x=time, y=rel)+geom_line()
 
 
-#####
-# spore ratio
-###define parameters
-# resource in inflow
-R_in <- 1e6
+################
+# is sporulation lost because spores have an equal mortality (washout)?
+# to test this I will add a parameter that reduces sporulation washout: 
+# pDs probability of spore dilution. 0<= pDs <=1.  
+# pDs=0 spores are all retained. pDs=1 spores dilution equals all other cells.
 
-# growth rate
-mu <- D
-# probaility of sporulation
-prob_spor <- 0.01
-#probability of reactivation of spores
-prob_actv <- 0.01
+chemostat1s <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * (N+Nmut) 
+    
+    #N are the sporulating bacteria 
+    dN <- mu * R * N - D * N - prob_spor * N + prob_actv * S - loss * N
+    # Nmut are the spo- mutants
+    dNmut <- mu * R * Nmut - D*Nmut +loss * N
+    
+    #S are the spores 
+    dS <- prob_spor * N - prob_actv * S - pDs*D*S
+    
+    
+    results <- c(dR, dN,dNmut, dS)
+    return (list(results))
+  })
+}
 
+# spore retention
+pDs <- 0.5
+# all parameters together
+params1s <- c(R_in, D, mu, prob_spor, prob_actv, loss, pDs )
 #declare initial conditions for state variables
-current0 <- c(R = R_in, N = 100, Sp1=1, Sp2=1,Sp3=1, Sp4=1,Sp5=1,S=1)
+current1s <- c(R = R_in, N = 1e5, Nmut=0, S=0)
 
 #define the time to run model
-t <- seq (0, 500, by=1)
+t.model <- 5000
+t <- seq (0, t.model, by=1)
 
+#solve the model and save the output
+out <- lsoda(current1s, t, chemostat1s, params1s)
+# plot (out)
 
-d.rates <- data.frame(dilution=rep(c(0.01,0.03,0.06,0.09,0.15,0.3,0.6,0.9,1),4), 
-                      spo.time= as.numeric(rep(c(1,3,6,9),each=9)),ratio=NA, N=NA, S=NA)
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population))+
+  # scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')
 
-for (i in 1:nrow(d.rates)){
-  #dilution rate
-  D <- d.rates$dilution[i]
-  mu <- D
+# bifuricate over spore retention parameter
+i.pDs <- sort(c(0.01,seq(0,1,0.1)))
+#define the time to run model
+t.model <- 5000
+t <- seq (0, t.model, by=1)
+#data frame to collect data
+d.res <- data.frame(matrix(ncol = 5, nrow = length(i.pDs)))
+colnames(d.res) <-  c('pDs','coex.t','N.t','S.t','Nmut.t')
+d.res$pDs <- i.pDs
+# list to save plots
+l.plot <- list()
+for (i in 1:length(i.pDs)){
+  # spore retention
+  pDs <- i.pDs[i]
   # all parameters together
-  params <- c(R_in, D, mu, prob_spor, prob_actv)
-  t.spo <- d.rates$spo.time[i]
-  if (t.spo==1){
-    current1 <- c(R = R_in, N = 100, S=1)
-    out <- lsoda(current1, t, chemostat1, params)
-  
-    } else if (t.spo==3){
-    current3 <- c(R = R_in, N = 100, I1=1, I2=1,S=1)
-    out <- lsoda(current3, t, chemostat3, params)
-  
-    } else if (t.spo==6){
-    current6 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,S=1)
-    out <- lsoda(current6, t, chemostat6, params)
-  
-    } else if (t.spo==9){
-    current9 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,I6=1, I7=1,I8=1,S=1)
-    out <- lsoda(current9, t, chemostat9, params)
-  
-    }
-
-  rel <- as.data.frame(out)
-  rel$all <- apply(X = rel[,3:ncol(rel)],MARGIN = 1,FUN = sum)
-  rel$rel <- rel$S/rel$all
-  d.rates$ratio[i] <- rel$rel[nrow(rel)]
-  d.rates$N[i] <- rel$N[nrow(rel)]
-  d.rates$S[i] <- rel$S[nrow(rel)]
+  params1s <- c(R_in, D, mu, prob_spor, prob_actv, loss, pDs )
+  #declare initial conditions for state variables
+  current1s <- c(R = R_in, N = 1e5, Nmut=0, S=0)
+  #solve the model and save the output
+  out <- lsoda(current1s, t, chemostat1s, params1s)
+  # save data
+    #time of equal densities (difference is the lowest)
+  d.res$coex.t[i] <-
+    out[which.min(abs(out[,'N']+out[,'S']-out[,'Nmut'])),'time']
+    #final densities
+  d.res$N.t[i] <-
+    out[nrow(out),'N']
+  d.res$Nmut.t[i] <-
+    out[nrow(out),'Nmut']
+  d.res$S.t[i] <-
+    out[nrow(out),'S']
+  # plots
+  out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+  l.plot[[i]] <- 
+    ggplot(out.l, aes(x=time, y=Conc))+
+    geom_line(aes(color=population))+
+    # scale_y_log10()+
+    theme_bw()+
+    scale_colour_brewer(palette='Set1')+
+    ggtitle(paste0('pDs=',pDs))
 }
-p1 <- 
-  ggplot(d.rates, aes(x=dilution, y=ratio))+
-    geom_line(aes(color=as.factor(spo.time)),size=1)+
-    geom_point(aes(shape=as.factor(spo.time),color=as.factor(spo.time)),size=3)+
-    scale_color_discrete(name="Sporulation time")+
-    scale_shape_discrete(name="Sporulation time")+
-    scale_y_log10(breaks=c(1e-1,1e-2,1e-3,1e-4))+
-    ylab("spore frequency (log)")+
-    xlab("Dilution rate (hr^-1)")+ theme_bw()+
-    theme(legend.position = "bottom")+
-    annotation_logticks(sides = 'l')+
-    ggtitle("spore frequency")
 
-p2 <- 
-  ggplot(d.rates, aes(x=dilution, y=S))+
-    geom_line(aes(color=as.factor(spo.time)),size=1)+
-    geom_point(aes(shape=as.factor(spo.time),color=as.factor(spo.time)),size=3)+
-    scale_color_discrete(name="Sporulation time")+
-    scale_shape_discrete(name="Sporulation time")+
-    scale_y_log10(limits=c(1e1,1e6))+
-    ylab("Spore conc. (log)")+
-    xlab("Dilution rate (hr^-1)")+ theme_bw()+
-    theme(legend.position = "bottom")+
-    annotation_logticks(sides = 'l')+
-    ggtitle("Spore concentration")
-p3 <- 
-  ggplot(d.rates, aes(x=dilution, y=N))+
-    geom_line(aes(color=as.factor(spo.time)),size=1)+
-    geom_point(aes(shape=as.factor(spo.time),color=as.factor(spo.time)),size=3)+
-    scale_color_discrete(name="Sporulation time")+
-    scale_shape_discrete(name="Sporulation time")+
-    scale_y_log10(limits=c(1e1,1e6))+ 
-    ylab("Vegetative cell conc.")+
-    xlab("Dilution rate (hr^-1)")+ theme_bw()+
-    theme(legend.position = "bottom")+
-    annotation_logticks(sides = 'l')+
-    ggtitle("Vegetative cell concentration")
+dev.off()
+plot(d.res$pDs,d.res$coex.t, type='l')
 
-library(gridExtra)
-grid.arrange(p1,p2,p3,nrow=1)
+barplot(log10(as.matrix(d.res[,3:5])), beside = T, ylim = range(pretty(-10:6)), col=rainbow(12), 
+        ylab = paste0("log of final density (t=",t.model,')'),
+        main="final densities in chemostat models\nwith varying spore washout (fraction of dilution rate)")
+legend("bottomright", legend = as.character(d.res$pDs), fill =rainbow(12), ncol=3)
 
+matplot(d.res$pDs,log10(as.matrix(d.res[,3:5])),type='l',col = c(2:4),lty=1, lwd=5,
+        xlab = "spore washout (fraction of dilution rate)", ylab = paste0("log of final density (t=",t.model,')'),
+        main="final densities in chemostat models with varying spore washout")
+legend("right", legend = c('N','S', 'Nmut'),,col = c(2:4),lty=1, lwd=5)
+
+pdf(file = "./figures/Phage_spore_dilutions.pdf", width = 10,paper = 'a4r')
+grid.arrange(grobs=l.plot,nrow=4, ncol=3)
+dev.off()
