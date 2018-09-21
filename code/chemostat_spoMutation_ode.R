@@ -260,19 +260,130 @@ for (i in 1:length(i.pDs)){
     ggtitle(paste0('pDs=',pDs))
 }
 
-dev.off()
-plot(d.res$pDs,d.res$coex.t, type='l')
+# dev.off()
+# plot(d.res$pDs,d.res$coex.t, type='l')
 
-barplot(log10(as.matrix(d.res[,3:5])), beside = T, ylim = range(pretty(-10:6)), col=rainbow(12), 
-        ylab = paste0("log of final density (t=",t.model,')'),
-        main="final densities in chemostat models\nwith varying spore washout (fraction of dilution rate)")
-legend("bottomright", legend = as.character(d.res$pDs), fill =rainbow(12), ncol=3)
+# barplot(log10(as.matrix(d.res[,3:5])), beside = T, ylim = range(pretty(-10:6)), col=rainbow(12), 
+#         ylab = paste0("log of final density (t=",t.model,')'),
+#         main="final densities in chemostat models\nwith varying spore washout (fraction of dilution rate)")
+# legend("bottomright", legend = as.character(d.res$pDs), fill =rainbow(12), ncol=3)
 
+pdf(file = "./figures/spore_washout_densities.pdf", width = 10,paper = 'a4r')
 matplot(d.res$pDs,log10(as.matrix(d.res[,3:5])),type='l',col = c(2:4),lty=1, lwd=5,
         xlab = "spore washout (fraction of dilution rate)", ylab = paste0("log of final density (t=",t.model,')'),
         main="final densities in chemostat models with varying spore washout")
 legend("right", legend = c('N','S', 'Nmut'),,col = c(2:4),lty=1, lwd=5)
+dev.off()
 
-pdf(file = "./figures/Phage_spore_dilutions.pdf", width = 10,paper = 'a4r')
+pdf(file = "./figures/spore_washout_plots.pdf", width = 10,paper = 'a4r')
+grid.arrange(grobs=l.plot,nrow=4, ncol=3)
+dev.off()
+
+###############
+# Will the virus favor sporulation under any of these conditions?
+chemostat1sv <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * (N+Nmut) 
+    
+    #N are the sporulating bacteria 
+    dN <- mu * R * N - D * N - prob_spor * N + prob_actv * S - loss * N - ads * N * V 
+    # Nmut are the spo- mutants
+    dNmut <- mu * R * Nmut - D*Nmut +loss * N- ads * Nmut * V 
+    
+    #S are the spores 
+    dS <- prob_spor * N - prob_actv * S -  pDs*D*S
+    #V are the phages
+    dV <- ads * N * V * (burst-1) + ads * Nmut * V * (burst-1) - D*V
+    
+    results <- c(dR, dN,dNmut, dS, dV)
+    return (list(results))
+  })
+}
+
+
+# spore retention
+pDs <- 0.01
+# all parameters together
+params1sv <- c(R_in, D, mu, prob_spor, prob_actv, loss, pDs, ads, burst)
+
+#declare initial conditions for state variables
+current1sv <- c(R = R_in, N = 1e5, Nmut=0, S=0, V=1)
+
+#define the time to run model
+t.model <- 10000
+t <- seq (0, t.model, by=1)
+
+#solve the model and save the output
+out <- lsoda(current1sv, t, chemostat1sv, params1sv)
+plot (out)
+
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population))+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')
+
+# bifuricate over spore retention parameter
+i.pDs <- sort(c(0.01,seq(0,1,0.1)))
+#define the time to run model
+t.model <- 5000
+t <- seq (0, t.model, by=1)
+#data frame to collect data
+d.res <- data.frame(matrix(ncol = 5, nrow = length(i.pDs)))
+colnames(d.res) <-  c('pDs','coex.t','N.t','S.t','Nmut.t')
+d.res$pDs <- i.pDs
+# list to save plots
+l.plot <- list()
+for (i in 1:length(i.pDs)){
+  # spore retention
+  pDs <- i.pDs[i]
+  # all parameters together
+  params1sv <- c(R_in, D, mu, prob_spor, prob_actv, loss, pDs, ads, burst)
+  #declare initial conditions for state variables
+  current1sv <- c(R = R_in, N = 1e5, Nmut=0, S=0, V=1)
+  #solve the model and save the output
+  out <- lsoda(current1sv, t, chemostat1sv, params1sv)
+  # save data
+  #time of equal densities (difference is the lowest)
+  d.res$coex.t[i] <-
+    out[which.min(abs(out[,'N']+out[,'S']-out[,'Nmut'])),'time']
+  #final densities
+  d.res$N.t[i] <-
+    out[nrow(out),'N']
+  d.res$Nmut.t[i] <-
+    out[nrow(out),'Nmut']
+  d.res$S.t[i] <-
+    out[nrow(out),'S']
+  # plots
+  out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+  l.plot[[i]] <- 
+    ggplot(out.l, aes(x=time, y=Conc))+
+    geom_line(aes(color=population))+
+    scale_y_log10()+
+    theme_bw()+
+    scale_colour_brewer(palette='Set1')+
+    ggtitle(paste0('pDs=',pDs))
+}
+
+# dev.off()
+# plot(d.res$pDs,d.res$coex.t, type='l')
+
+# barplot(log10(as.matrix(d.res[,3:5])), beside = T, ylim = range(pretty(-10:6)), col=rainbow(12), 
+#         ylab = paste0("log of final density (t=",t.model,')'),
+#         main="final densities in chemostat models\nwith varying spore washout (fraction of dilution rate)")
+# legend("bottomright", legend = as.character(d.res$pDs), fill =rainbow(12), ncol=3)
+
+pdf(file = "./figures/spore_washout_densities_phage.pdf", width = 10,paper = 'a4r')
+matplot(d.res$pDs,log10(as.matrix(d.res[,3:5])),type='l',col = c(2:4),lty=1, lwd=5,
+        xlab = "spore washout (fraction of dilution rate)", ylab = paste0("log of final density (t=",t.model,')'),
+        main="final densities in chemostat models with varying spore washout")
+legend("right", legend = c('N','S', 'Nmut'),,col = c(2:4),lty=1, lwd=5)
+dev.off()
+
+pdf(file = "./figures/spore_washout_plots_phage.pdf", width = 10,paper = 'a4r')
 grid.arrange(grobs=l.plot,nrow=4, ncol=3)
 dev.off()
