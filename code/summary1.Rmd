@@ -527,7 +527,7 @@ First thing I will ad a virus into the basic chemostst model. without sporulatio
 
 (@) $\frac{dN}{dt}=\mu RN -\delta NV - DN$
 
-(@) $\frac{dV}{dt}=\delta NV (\phi-1)- DN$
+(@) $\frac{dV}{dt}=\delta NV (\phi-1)- DV$
 
 ```{r , echo=FALSE, message=FALSE, fig.align='center'}
 chemostat0v <- function(t,current,params){
@@ -592,7 +592,7 @@ Next we'll combine the virus model and the sporulation model. Here only active c
 
 (@) $\frac{dS}{dt}=\alpha N-\beta S - DS$
 
-(@) $\frac{dV}{dt}=\delta NV (\phi-1)- DN$
+(@) $\frac{dV}{dt}=\delta NV (\phi-1)- DV$
 
 
 ```{r , echo=FALSE, message=FALSE, fig.align='center'}
@@ -680,3 +680,101 @@ ggplot(out.l, aes(x=time, y=Conc))+
   facet_grid(model~., scales = "fixed")
 
 ```
+
+## Loss of sporulation with a virus
+
+Finally lets put it all together and ask if a virus can prevent the loss of sporulation.
+
+(@) $\frac{dR}{dt}=D(Rin-R)-\mu R(N+N_{mut})$
+
+(@) $\frac{dN}{dt}=\mu RN -\alpha N+\beta S-\theta N - \delta NV -  DN$
+
+(@) $\frac{dS}{dt}=\alpha N-\beta S - DS$
+
+(@) $\frac{dV}{dt}=\delta (N+N_{mut})V (\phi-1)- DV$
+
+(@) $\frac{dN_{mut}}{dt}=\mu RN_{mut}+\theta N - \delta N_{mut}V- DN_{mut}$
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+chemostat1.vMut <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * (N+Nmut) 
+    
+    #N are the bacteria 
+    dN <- mu*R * N + alpha * S - D * N - beta * N - delta * N * V
+    
+    #S are the spores 
+    dS <- alpha * N - beta * S - D*S
+    
+    #V are the phages
+    dV <- delta * (N+Nmut) * V * (phi-1) - D*V
+    
+    # Nmut are the spo- mutants
+    dNmut <- mu * R * Nmut - D*Nmut +theta * N - delta * Nmut * V
+    
+    results <- c(dR, dN, dS, dV, dNmut)
+    return (list(results))
+  })
+}
+
+params1.vMut <- c(R_in=R_in, D=D, mu=mu, alpha=alpha, beta=beta, delta=delta, phi=phi,theta=theta)
+current1.vMut <- c(R = R_in, N = 100, S=0, V=1,Nmut=0)
+#define the time to run model
+t <- seq (0, 3000, by=1)
+#run the model
+out <- lsoda(current1.vMut, t, chemostat1.vMut, params1.vMut)
+
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# # To save time I will save the results of the first run and read results from file next times
+write.csv(out.l, "./summary1_output/out_10.csv")
+out.l <- read_csv("./summary1_output/out_10.csv")
+out.l <- out.l[,-1]
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','V', 'Nmut'))
+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1v)),'=',paste(params1v), collapse = '; '),'\n',
+    paste0(paste(names(current1v)),'=',paste(current1v), collapse = '; ')))
+
+```
+
+###**Sporulation is still lost!**
+Lets now compare loss of sporulation with and without a virus
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+out.l$model <- 'with Virus'
+out.noV <- read_csv("./summary1_output/out_07.csv")
+out.noV <- out.noV[,-1]
+out.noV$model <- "no Virus"
+out.l <- rbind( out.l,out.noV)
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','V', 'Nmut'))
+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  facet_grid(.~model, scales = "free_x")
+```
+
+The loss of sporulation look quite simmilar with or without a virus...
+Let's compare the values directly to each other
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=model), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  facet_grid(.~population, scales = "free_x")
+
+```
+
+The rates of loss (slopes) seem to be the same. The values are a bit lower with a virus.
