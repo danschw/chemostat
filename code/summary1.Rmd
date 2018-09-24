@@ -740,8 +740,8 @@ ggplot(out.l, aes(x=time, y=Conc))+
   theme_bw()+
   scale_colour_brewer(palette='Set1')+
   ggtitle(paste(
-    paste0(paste(names(params1v)),'=',paste(params1v), collapse = '; '),'\n',
-    paste0(paste(names(current1v)),'=',paste(current1v), collapse = '; ')))
+    paste0(paste(names(params1.vMut)),'=',paste(params1.vMut), collapse = '; '),'\n',
+    paste0(paste(names(current1.vMut)),'=',paste(current1.vMut), collapse = '; ')))
 
 ```
 
@@ -778,3 +778,35 @@ ggplot(out.l, aes(x=time, y=Conc))+
 ```
 
 The rates of loss (slopes) seem to be the same. The values are a bit lower with a virus.
+
+Would this change if the dilution rate was diales down? (trying D=0.01)
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+
+params1.vMut <- c(R_in=R_in, D=0.01, mu=mu, alpha=alpha, beta=beta, delta=delta, phi=phi,theta=theta)
+current1.vMut <- c(R = R_in, N = 100, S=0, V=1,Nmut=0)
+#define the time to run model
+t <- seq (0, 3000, by=1)
+#run the model
+out <- lsoda(current1.vMut, t, chemostat1.vMut, params1.vMut)
+
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# # To save time I will save the results of the first run and read results from file next times
+write.csv(out.l, "./summary1_output/out_11.csv")
+out.l <- read_csv("./summary1_output/out_11.csv")
+out.l <- out.l[,-1]
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','V', 'Nmut'))
+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1.vMut)),'=',paste(params1.vMut), collapse = '; '),'\n',
+    paste0(paste(names(current1.vMut)),'=',paste(current1.vMut), collapse = '; ')))
+
+```
+
+Not really, it just take longer
