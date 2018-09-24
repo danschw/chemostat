@@ -22,7 +22,7 @@ Before setting up the experiment I decide to run simulations of such chemostat e
 
 (@) $\frac{dN}{dt}=\mu RN - DN$
 
-```{r , echo=FALSE, message=FALSE}
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
 chemostat <- function(t,current,params){
   with(as.list(c(params,current)), {
     #list the equations for the derivatives of each state variable
@@ -40,7 +40,7 @@ chemostat <- function(t,current,params){
 # resource in inflow
 R_in <- 1e6
 #dilution rate
-D <- 0.01
+D <- 0.1
 # growth rate
 mu <- D
 # all parameters together
@@ -50,15 +50,15 @@ params <- c(R_in=R_in, D=D, mu=mu)
 current0 <- c(R = R_in, N = 100)
 
 #define the time to run model
-t <- seq (0, 10, by=1)
+t <- seq (0, 100, by=1)
 
 #solve the model and save the output
-# out <- lsoda(current0, t, chemostat, params)
-# 
-# # transform to long format for ggplot
-# out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
-# # To savve time I will save the results of the first run and read results from file next times
-# write_csv(out.l, "./summary1_output/out_01.csv")
+out <- lsoda(current0, t, chemostat, params)
+
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# To savve time I will save the results of the first run and read results from file next times
+write_csv(out.l, "./summary1_output/out_01.csv")
 out.l <- read_csv("./summary1_output/out_01.csv")
 #plot
 ggplot(out.l, aes(x=time, y=Conc))+
@@ -66,7 +66,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
   scale_y_log10()+
   annotation_logticks(sides = 'l')+
   theme_bw()+
-  scale_colour_brewer(palette='Set3')+
+  scale_colour_brewer(palette='Set1')+
   ggtitle(paste(
     paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
     paste0(paste(names(current0)),'=',paste(current0), collapse = '; ')))
@@ -82,7 +82,7 @@ First lets add sporulation as a single step process. In this model a constant fr
 
 (@) $\frac{dS}{dt}=\alpha N-\beta S - DS$
 
-```{r , echo=FALSE, message=FALSE}
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
 chemostat1 <- function(t,current,params){
   with(as.list(c(params,current)), {
     #list the equations for the derivatives of each state variable
@@ -103,7 +103,7 @@ chemostat1 <- function(t,current,params){
 # resource in inflow
 R_in <- 1e6
 #dilution rate
-D <- 0.01
+D <- 0.1
 # growth rate
 mu <- D
 # probaility of sporulation
@@ -119,15 +119,15 @@ current1 <- c(R = R_in, N = 100, S=1)
 
 
 #define the time to run model
-t <- seq (0, 200, by=1)
+t <- seq (0, 100, by=1)
 
-# #solve the model and save the output
-# out <- lsoda(current1, t, chemostat1, params)
-# 
-# # transform to long format for ggplot
-# out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
-# # To save time I will save the results of the first run and read results from file next times
-# write_csv(out.l, "./summary1_output/out_02.csv")
+#solve the model and save the output
+out <- lsoda(current1, t, chemostat1, params)
+
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# To save time I will save the results of the first run and read results from file next times
+write_csv(out.l, "./summary1_output/out_02.csv")
 out.l <- read_csv("./summary1_output/out_02.csv")
 #plot
 ggplot(out.l, aes(x=time, y=Conc))+
@@ -157,7 +157,7 @@ In Bacillus subtilis sporulation in fact takes much longer than vegetative cell 
 
 Note that each of the sporulation stages had a dilution loss term. The result is that only some fraction of cells that initate sporulation will contribute to the spore population.
 
-```{r , echo=FALSE, message=FALSE}
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
 chemostat3 <- function(t,current,params){
   with(as.list(c(params,current)), {
     #list the equations for the derivatives of each state variable
@@ -181,15 +181,15 @@ chemostat3 <- function(t,current,params){
 #declare initial conditions for state variables
 current3 <- c(R = R_in, N = 100, I1=1, I2=1,S=1)
 #define the time to run model
-t <- seq (0, 200, by=1)
+t <- seq (0, 100, by=1)
 
 #solve the model and save the output
-# out <- lsoda(current3, t, chemostat3, params)
-# 
-# # transform to long format for ggplot
-# out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
-# # To save time I will save the results of the first run and read results from file next times
-# write_csv(out.l, "./summary1_output/out_03.csv")
+out <- lsoda(current3, t, chemostat3, params)
+
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# To save time I will save the results of the first run and read results from file next times
+write_csv(out.l, "./summary1_output/out_03.csv")
 out.l <- read_csv("./summary1_output/out_03.csv")
 out.l$population <- as.factor(out.l$population)
 out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','I1','I2'))
@@ -209,7 +209,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
 
 We expect that the more stages there are to sporulation the less spores there will be at stedy state.
 
-```{r , echo=FALSE, message=FALSE}
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
 chemostat6 <- function(t,current,params){
   with(as.list(c(params,current)), {
     #list the equations for the derivatives of each state variable
@@ -259,11 +259,11 @@ chemostat9 <- function(t,current,params){
 current6 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,S=1)
 current9 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,I6=1, I7=1,I8=1,S=1)
 
-# out <- lsoda(current6, t, chemostat6, params)
-# # transform to long format for ggplot
-# out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
-# # To save time I will save the results of the first run and read results from file next times
-# write_csv(out.l, "./summary1_output/out_04.csv")
+out <- lsoda(current6, t, chemostat6, params)
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# To save time I will save the results of the first run and read results from file next times
+write_csv(out.l, "./summary1_output/out_04.csv")
 out.l <- read_csv("./summary1_output/out_04.csv")
 out.l$population <- as.factor(out.l$population)
 out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','I1','I2','I3','I4','I5'))
@@ -280,11 +280,11 @@ ggplot(out.l, aes(x=time, y=Conc))+
     paste0(paste(names(current6)),'=',paste(current6), collapse = '; ')))
 
 
-# out <- lsoda(current9, t, chemostat9, params)
-# # transform to long format for ggplot
-# out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
-# # To save time I will save the results of the first run and read results from file next times
-# write_csv(out.l, "./summary1_output/out_05.csv")
+out <- lsoda(current9, t, chemostat9, params)
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# To save time I will save the results of the first run and read results from file next times
+write_csv(out.l, "./summary1_output/out_05.csv")
 out.l <- read_csv("./summary1_output/out_05.csv")
 out.l$population <- as.factor(out.l$population)
 out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','I1','I2','I3','I4','I5','I6','I7','I8'))
@@ -304,49 +304,96 @@ ggplot(out.l, aes(x=time, y=Conc))+
 
 ```
 
+Now we can put the results of the models with different stages of sporulation side by side to see the diference:
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+out.l <- read_csv("./summary1_output/out_01.csv")
+out.l$stages <- 0
+out.all <- out.l
+out.l <- read_csv("./summary1_output/out_02.csv")
+out.l$stages <- 1
+out.all <- rbind(out.all,out.l)
+out.l <- read_csv("./summary1_output/out_03.csv")
+out.l$stages <- 3
+out.all <- rbind(out.all,out.l)
+out.l <- read_csv("./summary1_output/out_04.csv")
+out.l$stages <- 6
+out.all <- rbind(out.all,out.l)
+out.l <- read_csv("./summary1_output/out_05.csv")
+out.l$stages <- 9
+out.all <- rbind(out.all,out.l)
+
+out.all <- filter(out.all, population=='N'|population=='R'|population=='S')
+
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S'))
+
+ggplot(out.all, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  facet_grid(.~stages, scales = "free_x")
+```
+
+The number of stges does not seem to have a large influence. Lets overlay the populations from the different mosdels:
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+
+ggplot(out.all, aes(x=time, y=Conc))+
+  geom_line(aes(color=as.character(stages)), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  facet_grid(.~population, scales = "free_x")
+
+```
+
+As expected, the longer it takes to sporulate the less spores you get at steady state.
+
 ##Dilution rate and time length of sporulation
 How do dilution rates and the time it takes to complete sporulation combine to determine the density of spores in the chemostat model?
 
-```{r , echo=FALSE, message=FALSE}
-# t <- seq (0, 500, by=1)
-# 
-# 
-# d.rates <- data.frame(dilution=rep(c(0.01,0.03,0.06,0.09,0.15,0.3,0.6,0.9,1),4), 
-#                       spo.time= as.numeric(rep(c(1,3,6,9),each=9)),ratio=NA, N=NA, S=NA)
-# 
-# for (i in 1:nrow(d.rates)){
-#   #dilution rate
-#   D <- d.rates$dilution[i]
-#   mu <- D
-#   # all parameters together
-#   params <- c(R_in, D, mu, alpha, beta)
-#   t.spo <- d.rates$spo.time[i]
-#   if (t.spo==1){
-#     current1 <- c(R = R_in, N = 100, S=1)
-#     out <- lsoda(current1, t, chemostat1, params)
-#     
-#   } else if (t.spo==3){
-#     current3 <- c(R = R_in, N = 100, I1=1, I2=1,S=1)
-#     out <- lsoda(current3, t, chemostat3, params)
-#     
-#   } else if (t.spo==6){
-#     current6 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,S=1)
-#     out <- lsoda(current6, t, chemostat6, params)
-#     
-#   } else if (t.spo==9){
-#     current9 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,I6=1, I7=1,I8=1,S=1)
-#     out <- lsoda(current9, t, chemostat9, params)
-#     
-#   }
-#   
-#   rel <- as.data.frame(out)
-#   rel$all <- apply(X = rel[,3:ncol(rel)],MARGIN = 1,FUN = sum)
-#   rel$rel <- rel$S/rel$all
-#   d.rates$ratio[i] <- rel$rel[nrow(rel)]
-#   d.rates$N[i] <- rel$N[nrow(rel)]
-#   d.rates$S[i] <- rel$S[nrow(rel)]
-# }
-# write_csv(d.rates, "./summary1_output/out_06.csv")
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+t <- seq (0, 500, by=1)
+
+
+d.rates <- data.frame(dilution=rep(c(0.01,0.03,0.06,0.09,0.15,0.3,0.6,0.9,1),4),
+                      spo.time= as.numeric(rep(c(1,3,6,9),each=9)),ratio=NA, N=NA, S=NA)
+
+for (i in 1:nrow(d.rates)){
+  #dilution rate
+  D <- d.rates$dilution[i]
+  mu <- D
+  # all parameters together
+  params <- c(R_in, D, mu, alpha, beta)
+  t.spo <- d.rates$spo.time[i]
+  if (t.spo==1){
+    current1 <- c(R = R_in, N = 100, S=1)
+    out <- lsoda(current1, t, chemostat1, params)
+
+  } else if (t.spo==3){
+    current3 <- c(R = R_in, N = 100, I1=1, I2=1,S=1)
+    out <- lsoda(current3, t, chemostat3, params)
+
+  } else if (t.spo==6){
+    current6 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,S=1)
+    out <- lsoda(current6, t, chemostat6, params)
+
+  } else if (t.spo==9){
+    current9 <- c(R = R_in, N = 100, I1=1, I2=1,I3=1, I4=1,I5=1,I6=1, I7=1,I8=1,S=1)
+    out <- lsoda(current9, t, chemostat9, params)
+
+  }
+
+  rel <- as.data.frame(out)
+  rel$all <- apply(X = rel[,3:ncol(rel)],MARGIN = 1,FUN = sum)
+  rel$rel <- rel$S/rel$all
+  d.rates$ratio[i] <- rel$rel[nrow(rel)]
+  d.rates$N[i] <- rel$N[nrow(rel)]
+  d.rates$S[i] <- rel$S[nrow(rel)]
+}
+write_csv(d.rates, "./summary1_output/out_06.csv")
 d.rates <- read_csv("./summary1_output/out_06.csv")
 p1 <- 
   ggplot(d.rates, aes(x=dilution, y=ratio))+
@@ -395,22 +442,22 @@ grid.arrange(p1,p2,p3,nrow=1)
 
 ```
 
-As the dilution rate increases the time  it takes to complete sporulation becomes a more important factor in determining the steady state level of spores. Note however, that this has no effect on the actual concnetration of the cells. Cell densities do vary somewhat with dilution rate (this plot is on linear y).
+As the dilution rate increases the time it takes to complete sporulation becomes a more important factor in determining the steady state level of spores. Note however, that this has no effect on the actual concnetration of the cells. Cell densities do vary somewhat with dilution rate (this plot is on linear y).
 
 ##Loss of sporulaton
 In the next model a mutation enables the loss of sporulation. 
 
 (@) $\frac{dR}{dt}=D(Rin-R)-\mu R(N+N_{mut})$
 
-(@) $\frac{dN}{dt}=\mu RN -\alpha N+\beta S-\delta N -   DN$
+(@) $\frac{dN}{dt}=\mu RN -\alpha N+\beta S-\theta N -   DN$
 
 (@) $\frac{dS}{dt}=\alpha N-\beta S - DS$
 
-(@) $\frac{dN_{mut}}{dt}=\mu RN_{mut}+\delta N - DN_{mut}$
+(@) $\frac{dN_{mut}}{dt}=\mu RN_{mut}+\theta N - DN_{mut}$
 
 Beside sporulation there is no change in parameters of the mutant compared with the WT sporulator. The model is the single step sporulation model (no intermediates). the mutation rate to lose sporulation ($\delta$) is 10^-6^. 
 
-```{r , echo=FALSE, message=FALSE}
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
 chemostat1.mut <- function(t,current,params){
   with(as.list(c(params,current)), {
     #list the equations for the derivatives of each state variable
@@ -418,9 +465,9 @@ chemostat1.mut <- function(t,current,params){
     dR <- D * (R_in - R) - mu * R * (N+Nmut) 
     
     #N are the sporulating bacteria 
-    dN <- mu * R * N - D * N - alpha * N + beta * S - delta * N
+    dN <- mu * R * N - D * N - alpha * N + beta * S - theta * N
     # Nmut are the spo- mutants
-    dNmut <- mu * R * Nmut - D*Nmut +delta * N
+    dNmut <- mu * R * Nmut - D*Nmut +theta * N
     
     #S are the spores 
     dS <- alpha * N - beta * S - D*S
@@ -430,13 +477,16 @@ chemostat1.mut <- function(t,current,params){
     return (list(results))
   })
 }
+#dilution rate
+D <- 0.1
+# growth rate
+mu <- D
 
 #loss of sporulation by mutation
-delta <- 1e-6
-
+theta <- 1e-6
 
 # all parameters together
-params1 <- c(R_in, D, mu, alpha, beta, delta)
+params1 <- c(R_in=R_in, D=D, mu=mu, alpha=alpha, beta=beta,theta=theta)
 #declare initial conditions for state variables
 current1 <- c(R = R_in, N = 1e2, Nmut=0, S=0)
 #define the time to run model
@@ -445,6 +495,10 @@ t <- seq (0, 3000, by=1)
 #solve the model and save the output
 out <- lsoda(current1, t, chemostat1.mut, params1)
 out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# # To save time I will save the results of the first run and read results from file next times
+write.csv(out.l, "./summary1_output/out_07.csv")
+out.l <- read_csv("./summary1_output/out_07.csv")
+out.l <- out.l[,-1]
 out.l$population <- as.factor(out.l$population)
 out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','Nmut'))
 
@@ -464,4 +518,165 @@ The sporulator is outcompeted by the mutant!
 (warning message is beacuse the system was intiated with Nmut=0 and S=0, which doesn't work well on log scale...)
 
 
+##Adding a virus into the chemostat
 
+First thing I will ad a virus into the basic chemostst model. without sporulation.
+
+
+(@) $\frac{dR}{dt}=D(Rin-R)-\mu RN$
+
+(@) $\frac{dN}{dt}=\mu RN -\delta NV - DN$
+
+(@) $\frac{dV}{dt}=\delta NV (\phi-1)- DN$
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+chemostat0v <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * N 
+    
+    #N are the bacteria 
+    dN <- mu*R * N - delta * N * V  -  D*N
+
+    #V are the phages
+    dV <- delta * N * V * (phi-1) - D*V
+    results <- c(dR, dN, dV)
+    return (list(results))
+  })
+}
+
+#adsorption constant rate (per hour per ml)
+delta <- 1e-8
+
+# busrt size
+phi <- 50
+
+params0v <- c(R_in=R_in, D=D, mu=mu,  delta=delta, phi= phi)
+#declare initial conditions for state variables
+current0v <- c(R = R_in, N = 100,  V=1)
+#define the time to run model
+t <- seq (0, 100, by=1)
+#run the model
+out <- lsoda(current0v, t, chemostat0v, params0v)
+
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# # To save time I will save the results of the first run and read results from file next times
+write_csv(out.l, "./summary1_output/out_08.csv")
+out.l <- read_csv("./summary1_output/out_08.csv")
+#add empty value for S to work mae colors consistent
+out.l <- rbind(out.l, data.frame(time=0, population='S', Conc=NA))
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','V'))
+
+
+# ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params0v)),'=',paste(params0v), collapse = '; '),'\n',
+    paste0(paste(names(current0v)),'=',paste(current0v), collapse = '; ')))
+
+```
+
+The addition of the virus results in a viral limited population rather than a resource-limited population.
+Next we'll combine the virus model and the sporulation model. Here only active cells are suceptible to viral infection. We will use the single stage sporulation model.
+
+
+(@) $\frac{dR}{dt}=D(Rin-R)-\mu RN$
+
+(@) $\frac{dN}{dt}=\mu RN -\alpha N+\beta S-\delta NV-  DN$
+
+(@) $\frac{dS}{dt}=\alpha N-\beta S - DS$
+
+(@) $\frac{dV}{dt}=\delta NV (\phi-1)- DN$
+
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+chemostat1v <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * N 
+    
+    #N are the bacteria 
+    dN <- mu*R * N + alpha * S - D * N - beta * N - delta * N * V
+    #S are the spores 
+    dS <- alpha * N - beta * S - D*S
+    
+    #V are the phages
+    dV <- delta * N * V * (phi-1) - D*V
+    results <- c(dR, dN, dS, dV)
+    return (list(results))
+  })
+}
+
+params1v <- c(R_in=R_in, D=D, mu=mu, alpha=alpha, beta=beta, delta=delta, phi=phi)
+current1v <- c(R = R_in, N = 100, S=1, V=1)
+#define the time to run model
+t <- seq (0, 100, by=1)
+#run the model
+out <- lsoda(current1v, t, chemostat1v, params1v)
+
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# # To save time I will save the results of the first run and read results from file next times
+write_csv(out.l, "./summary1_output/out_09.csv")
+out.l <- read_csv("./summary1_output/out_09.csv")
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','V'))
+
+
+# ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1v)),'=',paste(params1v), collapse = '; '),'\n',
+    paste0(paste(names(current1v)),'=',paste(current1v), collapse = '; ')))
+
+
+
+```
+
+Now we can compare the reults of the sporulation-chemostat with and without sporulation and viruses
+
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+out.noV <- read_csv("./summary1_output/out_02.csv")
+out.noV$model <- "Spores"
+out.noS <- read_csv("./summary1_output/out_08.csv")
+out.noS$model <- "Virus"
+out.basic <- read_csv("./summary1_output/out_01.csv")
+out.basic$model <- "Basic"
+out.l$model <- "Spores+Virus"
+out.l <- rbind( out.l[-nrow(out.l),],out.noV,out.noS, out.basic)
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','V'))
+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  facet_grid(.~model, scales = "free_x")
+
+```
+
+The ability to sporulate results in a population that is not at the max density set by the resource, similar to the addition of a virus (though less dramatic). My interpertation of this is that spotulation, like infection, is a costly lost term.
+There are also some subtle differences in the time it takes for the system to reach steady state. This will be easier to see if we put all on the same time scale:
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  facet_grid(model~., scales = "fixed")
+
+```
