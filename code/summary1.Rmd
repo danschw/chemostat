@@ -18,9 +18,9 @@ library(tidyverse)
 We have discussed the idea of testing whether phages can prevent the loss of sporulation. The idea discussed was using a chemostat since it has been reported that spo- mutants can overtake chemostat populations within a couple of weeks (Dawes and Mandelstam 1970). Could the addition of phage result in maintenance of the sporulation trait during continuous culture?
 Before setting up the experiment I decide to run simulations of such chemostat experiments. A basic chemostat model of bacteria (**N**) growing in a limiting resource (**R**) is described by the following set of ODEs:
 
-(1) $\frac{dR}{dt}=D(Rin-R)-\mu RN$
+(@) $\frac{dR}{dt}=D(Rin-R)-\mu RN$
 
-(2) $\frac{dN}{dt}=\mu RN - DN$
+(@) $\frac{dN}{dt}=\mu RN - DN$
 
 ```{r , echo=FALSE, message=FALSE}
 chemostat <- function(t,current,params){
@@ -76,11 +76,11 @@ ggplot(out.l, aes(x=time, y=Conc))+
 # Adding Spores to the System
 First lets add sporulation as a single step process. In this model a constant fraction of cells ($\alpha$)  sporulate into spores (**S**) and a constant fraction of the spores ($\beta$) resucitate back into cells.
 
-(3) $\frac{dR}{dt}=D(Rin-R)-\mu RN$
+(@) $\frac{dR}{dt}=D(Rin-R)-\mu RN$
 
-(4) $\frac{dN}{dt}=\mu RN -\alpha N+\beta S-  DN$
+(@) $\frac{dN}{dt}=\mu RN -\alpha N+\beta S-  DN$
 
-(5) $\frac{dS}{dt}=\alpha N-\beta S - DS$
+(@) $\frac{dS}{dt}=\alpha N-\beta S - DS$
 
 ```{r , echo=FALSE, message=FALSE}
 chemostat1 <- function(t,current,params){
@@ -135,7 +135,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
   scale_y_log10()+
   annotation_logticks(sides = 'l')+
   theme_bw()+
-  scale_colour_brewer(palette='Set3')+
+  scale_colour_brewer(palette='Set1')+
   ggtitle(paste(
     paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
     paste0(paste(names(current1)),'=',paste(current1), collapse = '; ')))
@@ -145,15 +145,15 @@ ggplot(out.l, aes(x=time, y=Conc))+
 We can see that sporulation reduces the steady state value of the vegetative cells bellow the limiting resource value. As a consequence there is also a sight increase in steady state resource value.
 In Bacillus subtilis sporulation in fact takes much longer than vegetative cell replication: sporulation is on the order of hours and replication about 1/2 hour. To reflect these time dicrepencies I model sporulatiion a a chain of transitions from cell to spore through several intermediate stages. Each of these transitions takes one time unit and thus the maturation to a spore lasts as long as the number of intermediate steps. In the following example we sporulation takes 3 stages (2 intermediates (**I1,I2**)and mature spore)
 
-(6) $\frac{dR}{dt}=D(Rin-R)-\mu RN$
+(@) $\frac{dR}{dt}=D(Rin-R)-\mu RN$
 
-(7) $\frac{dN}{dt}=\mu RN -\alpha N+\beta S-  DN$
+(@) $\frac{dN}{dt}=\mu RN -\alpha N+\beta S-  DN$
 
-(8) $\frac{dI1}{dt}=\alpha N -I1 - DI1$
+(@) $\frac{dI1}{dt}=\alpha N -I1 - DI1$
 
-(9) $\frac{I2}{dt}=I1 -I2 - DI2$
+(@) $\frac{I2}{dt}=I1 -I2 - DI2$
 
-(10) $\frac{dS}{dt}=I2-\beta S - DS$
+(@) $\frac{dS}{dt}=I2-\beta S - DS$
 
 Note that each of the sporulation stages had a dilution loss term. The result is that only some fraction of cells that initate sporulation will contribute to the spore population.
 
@@ -200,7 +200,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
   scale_y_log10()+
   annotation_logticks(sides = 'l')+
   theme_bw()+
-  scale_colour_brewer(palette='Set3')+
+  scale_colour_brewer(palette='Set1')+
   ggtitle(paste(
     paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
     paste0(paste(names(current3)),'=',paste(current3), collapse = '; ')))
@@ -274,7 +274,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
   scale_y_log10()+
   annotation_logticks(sides = 'l')+
   theme_bw()+
-  scale_colour_brewer(palette='Set3')+
+  scale_colour_brewer(palette='Set1')+
   ggtitle(paste(
     paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
     paste0(paste(names(current6)),'=',paste(current6), collapse = '; ')))
@@ -295,7 +295,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
   scale_y_log10()+
   annotation_logticks(sides = 'l')+
   theme_bw()+
-  scale_colour_brewer(palette='Set3')+
+  scale_colour_brewer(palette='Set1')+
   ggtitle(paste(
     paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
     paste0(paste(names(current9)),'=',paste(current9), collapse = '; ')))
@@ -398,7 +398,17 @@ grid.arrange(p1,p2,p3,nrow=1)
 As the dilution rate increases the time  it takes to complete sporulation becomes a more important factor in determining the steady state level of spores. Note however, that this has no effect on the actual concnetration of the cells. Cell densities do vary somewhat with dilution rate (this plot is on linear y).
 
 ##Loss of sporulaton
-In the next model a mutation enables the loss of sporulation. Beside sporulation there is no change in parameters of the mutant compared with the WT sporulator. The model is the single step sporulation model (no intermediates). the mutation rate to loose sporulation is 10^-6. 
+In the next model a mutation enables the loss of sporulation. 
+
+(@) $\frac{dR}{dt}=D(Rin-R)-\mu R(N+N_{mut})$
+
+(@) $\frac{dN}{dt}=\mu RN -\alpha N+\beta S-\delta N -   DN$
+
+(@) $\frac{dS}{dt}=\alpha N-\beta S - DS$
+
+(@) $\frac{dN_{mut}}{dt}=\mu RN_{mut}+\delta N - DN_{mut}$
+
+Beside sporulation there is no change in parameters of the mutant compared with the WT sporulator. The model is the single step sporulation model (no intermediates). the mutation rate to lose sporulation ($\delta$) is 10^-6^. 
 
 ```{r , echo=FALSE, message=FALSE}
 chemostat1.mut <- function(t,current,params){
@@ -408,9 +418,9 @@ chemostat1.mut <- function(t,current,params){
     dR <- D * (R_in - R) - mu * R * (N+Nmut) 
     
     #N are the sporulating bacteria 
-    dN <- mu * R * N - D * N - alpha * N + beta * S - loss * N
+    dN <- mu * R * N - D * N - alpha * N + beta * S - delta * N
     # Nmut are the spo- mutants
-    dNmut <- mu * R * Nmut - D*Nmut +loss * N
+    dNmut <- mu * R * Nmut - D*Nmut +delta * N
     
     #S are the spores 
     dS <- alpha * N - beta * S - D*S
@@ -422,11 +432,11 @@ chemostat1.mut <- function(t,current,params){
 }
 
 #loss of sporulation by mutation
-loss <- 1e-6
+delta <- 1e-6
 
 
 # all parameters together
-params1 <- c(R_in, D, mu, alpha, beta, loss)
+params1 <- c(R_in, D, mu, alpha, beta, delta)
 #declare initial conditions for state variables
 current1 <- c(R = R_in, N = 1e2, Nmut=0, S=0)
 #define the time to run model
@@ -435,15 +445,23 @@ t <- seq (0, 3000, by=1)
 #solve the model and save the output
 out <- lsoda(current1, t, chemostat1.mut, params1)
 out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','Nmut'))
+
 
 # ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
 ggplot(out.l, aes(x=time, y=Conc))+
   geom_line(aes(color=population), size=2)+
   scale_y_log10()+
   theme_bw()+
-  scale_colour_brewer(palette='Set1')
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1)),'=',paste(params1), collapse = '; '),'\n',
+    paste0(paste(names(current1)),'=',paste(current1), collapse = '; ')))
 ```
 
 The sporulator is outcompeted by the mutant!
-(warning message is beacuse the system was intited with Nmut=0, which doesn't work well on log scale)
+(warning message is beacuse the system was intiated with Nmut=0 and S=0, which doesn't work well on log scale...)
+
+
 
