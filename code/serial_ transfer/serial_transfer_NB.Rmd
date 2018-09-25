@@ -1,0 +1,134 @@
+---
+title: "Serial tranfer model with sporulation"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(inline = function(x) {
+  knitr:::format_sci(x, 'md')
+})
+#Clear environment
+rm(list=ls())
+pd=par()
+#Load necessary library
+library(deSolve)
+library(tidyverse)
+
+setwd("~/GitHub/chemostat/code/serial_ transfer/")
+```
+The chemostat model seems unhelpful to test the idea that viruses can prevent the loss of sporulation. As an alternative I will try modeling a serial transfer experiment to test if this experimental setup is more suitable.
+
+I will be implementing the serial transfer model of:
+
+Chaudhry, W. N., Pleška, M., Shah, N. N., Weiss, H., McCall, I. C., Meyer, J. R., … Levin, B. R. 
+(2018). Leaky resistance and the conditions for the existence of lytic bacteriophage. 
+PLOS Biology, 16(8), e2005971. https://doi.org/10.1371/journal.pbio.2005971 
+
+# Simple model
+I will start with a model of serial transfer of a bacterium without sorulation and without phage. The model tracks changes in resouces (**R**) and bacteria (**N**). 
+According to Chandhury et al. growth dependence on resouces is given as a Monod function:
+
+$$ \psi(R) =  \frac {R}{k+R}$$
+ 
+ "*where R is the concentration (μg per mL) of the limiting resource and k is the “Monod constant,” corresponding to the concentration of the resource (μg per mL), at which the bacteria grow at a half of their maximum rate.*"
+
+Stripping there equations from phages and mutants, and adding a mortality term (**m**) for cells I am left with
+
+(@) $$\frac{dR}{dt}=-e\cdot \psi(R)\cdot vN $$
+
+(@) $$ \frac{dN}{dt}=\psi(R)\cdot v \cdot N - m\cdot N$$
+
+where **e** is *a conversion efficacy parameter (μg per cell)* and **v** is the *maximum growth rate*.
+```{r}
+#Define system of differential equations for resource and bacteria
+serial <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource (μg per mL)
+    dR =  -e *(R/(R+k))*v*N  
+    
+    #N are the bacteria 
+    dN = e *(R/(R+k))*v*N -m*N
+
+
+    results <- c(dR, dN )
+    return (list(results))
+  })
+}
+
+###define parameters
+# maximum growth rate
+v <- 1
+#conversion efficacy parameter
+e <- 1
+#Half-saturation constant of resource uptake by bacteria
+k = 50
+#mortality
+m=0.01
+# all parameters together
+params <- c (v=v,e=e, k=k,m=m)
+
+#declare initial conditions for state variables
+R_t0 <- 1e8
+N_t0 <- 1e6
+current <- c(R = R_t0 , N = N_t0)
+
+#define the time to run model
+t <- seq (0, 240, by=1)
+
+# run the model
+out <- lsoda(current, t, serial, params)
+# plot(out)
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population),size=2)+
+  # scale_y_log10()+
+  # annotation_logticks(sides = 'l')+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))
+
+```
+
+#### adding serial transfers
+I will now use the events functionality of the desolve package to replenish nutrients every 24 hours
+```{r}
+
+# add nutrients and dilute culture at regular time intervals
+event <- function(t, current, parms) {
+  current['R'] <- R_t0
+  current['N'] <- 0.1 * current['N']
+  return(current)
+}
+
+#deine time of transfer
+t.transfer <- 24
+t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
+
+out <- lsoda(current, t, serial, params,
+             events = list(func = event, time=t.event))
+
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population),size=1)+
+  # scale_y_log10()+
+  # annotation_logticks(sides = 'l')+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
+  facet_grid(population~.)
+  
+```
+
