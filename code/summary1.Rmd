@@ -1,18 +1,23 @@
 ---
 title: "First summary of chemostat model"
 author: "Daniel Schwartz"
-date: "September 6, 2018"
+date: "September 25, 2018"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(inline = function(x) {
+  knitr:::format_sci(x, 'md')
+})
 #Clear environment
 rm(list=ls())
 pd=par()
 #Load necessary library
 library(deSolve)
 library(tidyverse)
+
+setwd("~/GitHub/chemostat/code/")
 ```
 
 We have discussed the idea of testing whether phages can prevent the loss of sporulation. The idea discussed was using a chemostat since it has been reported that spo- mutants can overtake chemostat populations within a couple of weeks (Dawes and Mandelstam 1970). Could the addition of phage result in maintenance of the sporulation trait during continuous culture?
@@ -810,3 +815,351 @@ ggplot(out.l, aes(x=time, y=Conc))+
 ```
 
 Not really, it just take longer
+
+## Reducing the cost of sporulation
+
+Dormancy is thought to be beneficial as a means of evading harsh environmental conditions. It is fundementaly a trade-off between reproduction and survival: dormant cells don;t reproduce and have a lower moortality compared with active cells. In a chemostat spores do not reproduce but have the same mortality as active cells - dictated by dilution. Thus sporulation has a price with no benefit. This is likely the reason that that sporulators are consistently out-competed by asporogenic mutants.
+
+In the model we can test this by imposing a different dilution rate for spores and cells. This of course cannot be done experimentally. Yo the basic chemostat mosel with a single step sporulator we will add a parameter (**d**) that reduces spore dilution and set it to 10^-4^ :
+
+
+(@) $\frac{dR}{dt}=D(Rin-R)-\mu RN$
+
+(@) $\frac{dN}{dt}=\mu RN -\alpha N+\beta S-  DN$
+
+(@) $\frac{dS}{dt}=\alpha N-\beta S - dDS$
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+chemostat1.dd <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * N 
+    
+    #N are the bacteria 
+    dN <- mu * R * N - D * N - alpha * N + beta * S
+    #S are the spores 
+    dS <- alpha * N - beta * S - d*D*S
+    
+    results <- c(dR, dN, dS)
+    return (list(results))
+  })
+}
+
+###define parameters
+# resource in inflow
+R_in <- 1e6
+#dilution rate
+D <- 0.1
+# growth rate
+mu <- D
+# probaility of sporulation
+alpha <- 0.01
+#probability of reactivation of spores
+beta <- 0.01
+# reduced dilution of spores
+d <- 1e-4
+# all parameters together
+params1.dd <- c(R_in=R_in, D=D, mu=mu, alpha=alpha, beta=beta, d=d)
+
+#declare initial conditions for state variables
+current1.dd <- c(R = R_in, N = 100, S=1)
+
+
+#define the time to run model
+t <- seq (0, 500, by=1)
+
+#solve the model and save the output
+out <- lsoda(current1.dd, t, chemostat1.dd, params1.dd)
+
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# To save time I will save the results of the first run and read results from file next times
+write_csv(out.l, "./summary1_output/out_12.csv")
+out.l <- read_csv("./summary1_output/out_12.csv")
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  annotation_logticks(sides = 'l')+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1.dd)),'=',paste(params1.dd), collapse = '; '),'\n',
+    paste0(paste(names(current1.dd)),'=',paste(current1.dd), collapse = '; ')))
+
+n <- out[nrow(out),'N']
+s <- out[nrow(out),'S']
+```
+
+We now get spores reaching the same denity as active cells. At the end point there are `r n` active cells and `r s` spores (s/n=`r s/n`). Let's compare the reullts of the 2 models:
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+out.l$model <- paste0("d x D=",D*d)
+out.basic <- read_csv("./summary1_output/out_02.csv")
+out.basic$model <-paste0("d x D=",D)
+out.l <- rbind( out.l,out.basic)
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S'))
+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  facet_grid(.~model, scales = "free_x")
+
+
+```
+
+Note that the time axes are not equal.
+How does a reduced spore dilution affect the competition? We will now add the reduced spore dilution parameter to the competition model.
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+chemostat1.mut.dd <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * (N+Nmut) 
+    
+    #N are the sporulating bacteria 
+    dN <- mu * R * N - D * N - alpha * N + beta * S - theta * N
+    # Nmut are the spo- mutants
+    dNmut <- mu * R * Nmut - D*Nmut +theta * N
+    
+    #S are the spores 
+    dS <- alpha * N - beta * S - d*D*S
+    
+    
+    results <- c(dR, dN,dNmut, dS)
+    return (list(results))
+  })
+}
+alpha <- beta
+
+
+# all parameters together
+params1.mut.dd <- c(R_in=R_in, D=D, mu=mu, alpha=alpha, beta=beta,d=d,theta=theta)
+#declare initial conditions for state variables
+current1.mut.dd <- c(R = R_in, N = 1e2, Nmut=0, S=0)
+#define the time to run model
+t <- seq (0, 1e6, by=1000)
+
+#solve the model and save the output
+out <- lsoda(current1.mut.dd, t, chemostat1.mut.dd, params1.mut.dd)
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# # To save time I will save the results of the first run and read results from file next times
+write.csv(out.l, "./summary1_output/out_13.csv")
+out.l <- read_csv("./summary1_output/out_13.csv")
+out.l <- out.l[,-1]
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','Nmut'))
+
+
+# ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1.mut.dd)),'=',paste(params1.mut.dd), collapse = '; '),'\n',
+    paste0(paste(names(current1.mut.dd)),'=',paste(current1.mut.dd), collapse = '; ')))
+```
+
+The reduction of spore mortality allows the sporulator to remain in the chemostat for much longer. However when I allow the model to run for a very long time (10^6^ time units) it can be seen that the mutant eventually out competes the WT. Maybe this is just because the WT mutational loss? Let's run the same model without sporulation ($\alpha$=0). is mutation itself is a loss term than WT will be outcompeted even witout sporulating.
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+alpha <- 0
+
+# all parameters together
+params1.mut.dd <- c(R_in=R_in, D=D, mu=mu, alpha=alpha, beta=beta,d=d,theta=theta)
+#declare initial conditions for state variables
+current1.mut.dd <- c(R = R_in, N = 1e2, Nmut=0, S=0)
+#define the time to run model
+t <- seq (0, 1e6, by=1000)
+
+#solve the model and save the output
+out <- lsoda(current1.mut.dd, t, chemostat1.mut.dd, params1.mut.dd)
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# # To save time I will save the results of the first run and read results from file next times
+write.csv(out.l, "./summary1_output/out_14.csv")
+out.l <- read_csv("./summary1_output/out_14.csv")
+out.l <- out.l[,-1]
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','Nmut'))
+
+
+# ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1.mut.dd)),'=',paste(params1.mut.dd), collapse = '; '),'\n',
+    paste0(paste(names(current1.mut.dd)),'=',paste(current1.mut.dd), collapse = '; ')))
+```
+
+Indeed, the mutation itself is a loss term on the WT. So if we add a reverse-mutation term they should reach steady-state.
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+chemostat1.mut.dd <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * (N+Nmut) 
+    
+    #N are the sporulating bacteria 
+    dN <- mu * R * N - D * N - alpha * N + beta * S - theta * N +  theta*Nmut
+    # Nmut are the spo- mutants
+    dNmut <- mu * R * Nmut - D*Nmut +theta * N -theta*Nmut
+    
+    #S are the spores 
+    dS <- alpha * N - beta * S - d*D*S
+    
+    
+    results <- c(dR, dN,dNmut, dS)
+    return (list(results))
+  })
+}
+
+
+# all parameters together
+params1.mut.dd <- c(R_in=R_in, D=D, mu=mu, alpha=alpha, beta=beta,d=d,theta=theta)
+#declare initial conditions for state variables
+current1.mut.dd <- c(R = R_in, N = 1e2, Nmut=0, S=0)
+#define the time to run model
+t <- seq (0, 2e6, by=1000)
+
+#solve the model and save the output
+out <- lsoda(current1.mut.dd, t, chemostat1.mut.dd, params1.mut.dd)
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# To save time I will save the results of the first run and read results from file next times
+write.csv(out.l, "./summary1_output/out_14.csv")
+out.l <- read_csv("./summary1_output/out_14.csv")
+out.l <- out.l[,-1]
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','Nmut'))
+
+
+# ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1.mut.dd)),'=',paste(params1.mut.dd), collapse = '; '),'\n',
+    paste0(paste(names(current1.mut.dd)),'=',paste(current1.mut.dd), collapse = '; ')))
+
+N <- out[nrow(out),'N']
+Nmut <- out[nrow(out),'Nmut']
+
+```
+
+After a very long time the mutant and the WT reach steady state. At the end point there are `r N` WT cells and `r Nmut` mutants (N_mut_/N=`r Nmut/N`). 
+
+### Virus in reduced cost-of-sporulation model
+What will the out come of competition be in a model of reduced spore dilution and a virus?
+
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+chemostat1.vMut.dd <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * (N+Nmut) 
+    
+    #N are the bacteria 
+    dN <- mu*R * N + alpha * S - D * N - beta * N - delta * N * V 
+    
+    #S are the spores 
+    dS <- alpha * N - beta * S - d*D*S
+    
+    #V are the phages
+    dV <- delta * (N+Nmut) * V * (phi-1) - D*V
+    
+    # Nmut are the spo- mutants
+    dNmut <- mu * R * Nmut - D*Nmut +theta * N - delta * Nmut * V -theta*Nmut
+    
+    results <- c(dR, dN, dS, dV, dNmut)
+    return (list(results))
+  })
+}
+
+params1.vMut.dd <- c(R_in=R_in, D=D, mu=mu, alpha=beta, beta=beta, d=d,delta=delta, phi=phi,theta=theta)
+current1.vMut.dd <- c(R = R_in, N = 100, S=0, V=1,Nmut=0)
+#define the time to run model
+t <- seq (0, 5e5, by=100)
+#run the model
+out <- lsoda(current1.vMut.dd, t, chemostat1.vMut.dd, params1.vMut.dd)
+
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# # To save time I will save the results of the first run and read results from file next times
+write.csv(out.l, "./summary1_output/out_15.csv")
+out.l <- read.csv("./summary1_output/out_15.csv")
+out.l <- out.l[,-1]
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','V', 'Nmut'))
+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1.vMut.dd)),'=',paste(params1.vMut.dd), collapse = '; '),'\n',
+    paste0(paste(names(current1.vMut.dd)),'=',paste(current1.vMut.dd), collapse = '; ')))
+```
+Reducing the cost of sporulation does not rescue the sporulator from being outcompeted by mutant in the presence of virus.  
+
+What if we add to that the reverse-mutation?
+```{r , echo=FALSE, message=FALSE, fig.align='center'}
+chemostat1.vMut.dd <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * (N+Nmut) 
+    
+    #N are the bacteria 
+    dN <- mu*R * N + alpha * S - D * N - beta * N - delta * N * V+theta*Nmut
+    
+    #S are the spores 
+    dS <- alpha * N - beta * S - d*D*S
+    
+    #V are the phages
+    dV <- delta * (N+Nmut) * V * (phi-1) - D*V
+    
+    # Nmut are the spo- mutants
+    dNmut <- mu * R * Nmut - D*Nmut +theta * N - delta * Nmut * V -theta*Nmut
+    
+    results <- c(dR, dN, dS, dV, dNmut)
+    return (list(results))
+  })
+}
+
+params1.vMut.dd <- c(R_in=R_in, D=D, mu=mu, alpha=beta, beta=beta, d=d,delta=delta, phi=phi,theta=theta)
+current1.vMut.dd <- c(R = R_in, N = 100, S=0, V=1,Nmut=0)
+#define the time to run model
+t <- seq (0, 5e5, by=100)
+#run the model
+out <- lsoda(current1.vMut.dd, t, chemostat1.vMut.dd, params1.vMut.dd)
+
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+# # To save time I will save the results of the first run and read results from file next times
+write.csv(out.l, "./summary1_output/out_16.csv")
+out.l <- read.csv("./summary1_output/out_16.csv")
+out.l <- out.l[,-1]
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','V', 'Nmut'))
+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1.vMut.dd)),'=',paste(params1.vMut.dd), collapse = '; '),'\n',
+    paste0(paste(names(current1.vMut.dd)),'=',paste(current1.vMut.dd), collapse = '; ')))
+```
+
+**Still the mutant wins!**
