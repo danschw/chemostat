@@ -50,7 +50,7 @@ serial <- function(t,current,params){
     dR =  -e *(R/(R+k))*v*N  
     
     #N are the bacteria 
-    dN = e *(R/(R+k))*v*N -m*N
+    dN = (R/(R+k))*v*N -m*N
 
 
     results <- c(dR, dN )
@@ -60,40 +60,39 @@ serial <- function(t,current,params){
 
 ###define parameters
 # maximum growth rate
-v <- 1
+v <- 0.2
 #conversion efficacy parameter
-e <- 1
+e <- 5e-7
 #Half-saturation constant of resource uptake by bacteria
-k = 50
+k = 1
 #mortality
 m=0.01
 # all parameters together
 params <- c (v=v,e=e, k=k,m=m)
 
 #declare initial conditions for state variables
-R_t0 <- 1e8
-N_t0 <- 1e6
+R_t0 <- 10
+N_t0 <- 1e5
 current <- c(R = R_t0 , N = N_t0)
 
 #define the time to run model
-t <- seq (0, 240, by=1)
+t <- seq (0, 24, by=1)
 
 # run the model
 out <- lsoda(current, t, serial, params)
 # plot(out)
-# transform to long format for ggplot
+#transform to long format for ggplot
 out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
 
 #plot
 ggplot(out.l, aes(x=time, y=Conc))+
-  geom_line(aes(color=population),size=2)+
-  # scale_y_log10()+
-  # annotation_logticks(sides = 'l')+
+  geom_line(size=1)+
   theme_bw()+
   scale_colour_brewer(palette='Set1')+
   ggtitle(paste(
     paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
-    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
+  facet_grid(population~., scales = "free_y")
 
 ```
 
@@ -108,6 +107,8 @@ event <- function(t, current, parms) {
   return(current)
 }
 
+#define the time to run model
+t <- seq (0, 240, by=1)
 #deine time of transfer
 t.transfer <- 24
 t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
@@ -120,15 +121,110 @@ out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out
 
 #plot
 ggplot(out.l, aes(x=time, y=Conc))+
-  geom_line(aes(color=population),size=1)+
-  # scale_y_log10()+
-  # annotation_logticks(sides = 'l')+
+  geom_line(size=1)+
   theme_bw()+
   scale_colour_brewer(palette='Set1')+
   ggtitle(paste(
     paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
     paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
-  facet_grid(population~.)
+  facet_grid(population~., scales = "free_y")
   
 ```
 
+#### Adding sporulation
+I need to add terms that will make sporulation (**s**) and germiation (**g**) sependent on **R**. I came up with the following functions:
+
+
+$$ s(R)=2^{-R} $$
+$$g(R)= \frac {R}{R+1} $$
+
+```{r}
+R <- 0:10#seq(0,1000,by = 1)
+par(mfrow=c(2, 1) )
+plot(R, 2^-(0.5*R), main="sporulation", type='l', col="red")
+plot(R, R/(R+.1), main="germination", type='l', col="blue")
+
+```
+
+These functions are quite abrupt but they will have to do for now. I will start with a simple model without transfers.
+```{r}
+#Define system of differential equations for resource and bacteria
+serial <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource (μg per mL)
+    dR =  -e *(R/(R+k))*v*N  
+    
+    #N are the bacteria 
+    dN = (R/(R+k))*v*N +(R/(R+.1))*S -(2^(-R/2))*N -m*N
+   
+    #S are the spores 
+    dS = (2^(-R/2))*N -(R/(R+.1))*S
+
+    results <- c(dR, dN, dS )
+    return (list(results))
+  })
+}
+
+###define parameters
+N_t0 <- 100
+S_t0 <- 1
+current <- c(R = R_t0 , N = N_t0, S=S_t0)
+
+#define the time to run model
+t <- seq (0, 240, by=1)
+
+# run the model
+out <- lsoda(current, t, serial, params)
+# plot(out)
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
+  facet_grid(population~., scales = "free_y")
+```
+
+That seems to be working. I will next att serial transfers to the sporulation model
+
+```{r}
+
+# add nutrients and dilute culture at regular time intervals
+event <- function(t, current, parms) {
+  current['R'] <- R_t0
+  current['N'] <- 0.1 * current['N']
+  return(current)
+}
+
+#define the time to run model
+t <- seq (0, 1480, by=1)
+#deine time of transfer
+t.transfer <-100
+t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
+
+out <- lsoda(current, t, serial, params,
+             events = list(func = event, time=t.event))
+
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  # scale_y_log10()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
+  facet_grid(population~., scales = "free_y")
+  
+```
+
+I need to figure out why the population size is growing indefinetly. I may have run int the atto-fox pronlem again :(
