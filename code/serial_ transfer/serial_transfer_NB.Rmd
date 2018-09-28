@@ -60,7 +60,7 @@ serial <- function(t,current,params){
 
 ###define parameters
 # maximum growth rate
-v <- 0.2
+v <- 1
 #conversion efficacy parameter
 e <- 5e-7
 #Half-saturation constant of resource uptake by bacteria
@@ -103,7 +103,7 @@ I will now use the events functionality of the desolve package to replenish nutr
 # add nutrients and dilute culture at regular time intervals
 event <- function(t, current, parms) {
   current['R'] <- R_t0
-  current['N'] <- 0.1 * current['N']
+  current['N'] <- 0.01 * current['N']
   return(current)
 }
 
@@ -141,8 +141,9 @@ $$g(R)= \frac {R}{R+1} $$
 ```{r}
 R <- 0:10#seq(0,1000,by = 1)
 par(mfrow=c(2, 1) )
-plot(R, 2^-(0.5*R), main="sporulation", type='l', col="red")
-plot(R, R/(R+.1), main="germination", type='l', col="blue")
+plot(R, 2^-R, main="sporulation", type='l', lwd=3, las=1)
+plot(R, R/(R+1), main="germination", type='l', lwd=3, las=1)
+
 
 ```
 
@@ -156,10 +157,10 @@ serial <- function(t,current,params){
     dR =  -e *(R/(R+k))*v*N  
     
     #N are the bacteria 
-    dN = (R/(R+k))*v*N +(R/(R+.1))*S -(2^(-R/2))*N -m*N
+    dN = (R/(R+k))*v*N +(R/(R+1))*S -(2^-R)*N -m*N
    
     #S are the spores 
-    dS = (2^(-R/2))*N -(R/(R+.1))*S
+    dS = (2^-R)*N -(R/(R+1))*S
 
     results <- c(dR, dN, dS )
     return (list(results))
@@ -168,7 +169,7 @@ serial <- function(t,current,params){
 
 ###define parameters
 N_t0 <- 100
-S_t0 <- 1
+S_t0 <- 0
 current <- c(R = R_t0 , N = N_t0, S=S_t0)
 
 #define the time to run model
@@ -198,14 +199,15 @@ That seems to be working. I will next att serial transfers to the sporulation mo
 # add nutrients and dilute culture at regular time intervals
 event <- function(t, current, parms) {
   current['R'] <- R_t0
-  current['N'] <- 0.1 * current['N']
+  current['N'] <- 0.01 * current['N']
+  current['S'] <- 0.01 * current['S']
   return(current)
 }
 
 #define the time to run model
-t <- seq (0, 1480, by=1)
+t <- seq (0, 480, by=1)
 #deine time of transfer
-t.transfer <-100
+t.transfer <-24
 t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
 
 out <- lsoda(current, t, serial, params,
@@ -227,4 +229,100 @@ ggplot(out.l, aes(x=time, y=Conc))+
   
 ```
 
-I need to figure out why the population size is growing indefinetly. I may have run int the atto-fox pronlem again :(
+#### Adding a virus
+Using functions of Chaudury paper, but adding a mortality rate also for the virus. At first its the same mortality as the active cells.(m=`r m`)
+
+```{r}
+serial <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource (μg per mL)
+    dR =  -e *(R/(R+k))*v*N  
+    
+    #N are the bacteria 
+    dN = (R/(R+k))*v*N +(R/(R+1))*S -(2^-R)*N -a*(R/(R+k))*v*N -m*N
+   
+    #S are the spores 
+    dS = (2^-R)*N -(R/(R+1))*S
+    
+    #V are the viruses 
+    dV = a*(R/(R+k))*v*N*(b-1)-m*V
+
+    results <- c(dR, dN, dS, dV )
+    return (list(results))
+  })
+}
+
+###define parameters
+#viral growth rate
+a <- .1
+#burst size
+b <- 60
+
+V_t0 <- 1
+S_t0 <- 1
+current <- c(R = R_t0 , N = N_t0, S=S_t0, V=V_t0)
+
+#define the time to run model
+t <- seq (0, 240, by=1)
+
+# run the model
+out <- lsoda(current, t, serial, params)
+# plot(out)
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  # scale_x_log10()+
+  ggtitle(paste(
+    paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
+  facet_grid(population~., scales = "free_y")
+
+```
+
+Works reasonably well.
+I will next add transfers to this model.
+
+```{r}
+
+# add nutrients and dilute culture at regular time intervals
+event <- function(t, current, parms) {
+  current['R'] <- R_t0
+  current['N'] <- 0.01 * current['N']
+  current['S'] <- 0.01 * current['S']
+  current['V'] <- 0.01 * current['V']
+  return(current)
+}
+
+#define the time to run model
+t <- seq (0, 480, by=1)
+#deine time of transfer
+t.transfer <-24
+t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
+
+out <- lsoda(current, t, serial, params,
+             events = list(func = event, time=t.event))
+
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  # scale_y_log10()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
+  facet_grid(population~., scales = "free_y")
+  
+```
+
+#Next
+## add spore-loss mutant without virus
