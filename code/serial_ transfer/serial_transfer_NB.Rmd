@@ -192,7 +192,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
   facet_grid(population~., scales = "free_y")
 ```
 
-That seems to be working. I will next att serial transfers to the sporulation model
+That seems to be working. I will next add serial transfers to the sporulation model
 
 ```{r}
 
@@ -229,6 +229,126 @@ ggplot(out.l, aes(x=time, y=Conc))+
   
 ```
 
+## Will sporulation be lost in serial transfer?
+To test this I will add to the system a single mutant that does not sporulate.
+
+```{r}
+#Define system of differential equations for resource and bacteria
+serial <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource (μg per mL)
+    dR =  -e *(R/(R+k))*v*(N+Nmut)  
+    
+    #N are the bacteria 
+    dN = (R/(R+k))*v*N +(R/(R+1))*S -(2^-R)*N -m*N
+   
+    #S are the spores 
+    dS = (2^-R)*N -(R/(R+1))*S
+    
+    #Nmut is the non-sporlator
+    #N are the bacteria 
+    dNmut = (R/(R+k))*v*Nmut -m*Nmut
+
+    results <- c(dR, dN, dS, dNmut )
+    return (list(results))
+  })
+}
+
+###define parameters
+N_t0 <- 100
+S_t0 <- 0
+current <- c(R = R_t0 , N = N_t0, S=S_t0, Nmut=1)
+
+#define the time to run model
+t <- seq (0, 240, by=1)
+
+# run the model
+out <- lsoda(current, t, serial, params)
+# plot(out)
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
+  facet_grid(population~., scales = "free_y")
+```
+
+Without transfers the non-sporulator will eventually be lost. Next lets look at 24 hour transfers. 
+
+```{r}
+
+# add nutrients and dilute culture at regular time intervals
+event <- function(t, current, parms) {
+  current['R'] <- R_t0
+  current['N'] <- 0.01 * current['N']
+  current['S'] <- 0.01 * current['S']
+  current['Nmut'] <- 0.01 * current['Nmut']
+  return(current)
+}
+
+#define the time to run model
+t <- seq (0, 480, by=1)
+#deine time of transfer
+t.transfer <-24
+t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
+
+out <- lsoda(current, t, serial, params,
+             events = list(func = event, time=t.event))
+
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  # scale_y_log10()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
+  facet_grid(population~., scales = "free_y")
+  
+```
+
+Under this transfer regime the sporulator is outcompeted. How about if we tranfer every 10 days?
+
+```{r}
+
+
+#define the time to run model
+t <- seq (0, 2500, by=1)
+#deine time of transfer
+t.transfer <-240
+t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
+
+out <- lsoda(current, t, serial, params,
+             events = list(func = event, time=t.event))
+
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  # scale_y_log10()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
+  facet_grid(population~., scales = "free_y")
+  
+```
+This enables the sporulator to out-compete the invader. Now the model captures the expected behaviour: sporulation is maintained when resource supply is infrequent. Lets see if the virus can help maintain sporulation when the resouce supply does not favor it (1 day transfers).
+
 #### Adding a virus
 Using functions of Chaudury paper, but adding a mortality rate also for the virus. At first its the same mortality as the active cells.(m=`r m`)
 
@@ -255,10 +375,11 @@ serial <- function(t,current,params){
 
 ###define parameters
 #viral growth rate
-a <- .1
+a <- .01
 #burst size
 b <- 60
-
+# all parameters together
+params <- c (v=v,e=e, k=k,m=m, a=a, b=b)
 V_t0 <- 1
 S_t0 <- 1
 current <- c(R = R_t0 , N = N_t0, S=S_t0, V=V_t0)
@@ -285,7 +406,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
 
 ```
 
-Works reasonably well.
+Works reasonably well. Though that 'a' parameter is a bit unclear.
 I will next add transfers to this model.
 
 ```{r}
@@ -295,6 +416,96 @@ event <- function(t, current, parms) {
   current['R'] <- R_t0
   current['N'] <- 0.01 * current['N']
   current['S'] <- 0.01 * current['S']
+  current['V'] <- 0.01 * current['V']
+  return(current)
+}
+
+#define the time to run model
+t <- seq (0, 240, by=1)
+#deine time of transfer
+t.transfer <-24
+t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
+
+out <- lsoda(current, t, serial, params,
+             events = list(func = event, time=t.event))
+
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  # scale_y_log10()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
+  facet_grid(population~., scales = "free_y")
+  
+```
+
+Now adding a non-sporulating invader. Viruses can infect active cells of both types but not the spores.
+```{r}
+#Define system of differential equations for resource and bacteria
+serial <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource (μg per mL)
+    dR =  -e *(R/(R+k))*v*(N+Nmut)  
+    
+    #N are the bacteria 
+    dN = (R/(R+k))*v*N +(R/(R+1))*S -(2^-R)*N -a*(R/(R+k))*v*N  -m*N
+   
+    #S are the spores 
+    dS = (2^-R)*N -(R/(R+1))*S
+    
+    #Nmut is the non-sporulator
+    dNmut = (R/(R+k))*v*Nmut -a*(R/(R+k))*v*Nmut  -m*Nmut
+    
+    #V are the viruses 
+    dV = a*(R/(R+k))*v*(N+Nmut)*(b-1)-m*V
+
+    results <- c(dR, dN, dS, dNmut, dV )
+    return (list(results))
+  })
+}
+
+###define starting values
+N_t0 <- 100
+S_t0 <- 0
+current <- c(R = R_t0 , N = N_t0, S=S_t0, Nmut=1, V=1)
+
+#define the time to run model
+t <- seq (0, 240, by=1)
+
+# run the model
+out <- lsoda(current, t, serial, params)
+# plot(out)
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
+  facet_grid(population~., scales = "free_y")
+```
+
+Without transfers the non-sporulator will eventually be lost. Next lets look at 24 hour transfers. 
+
+```{r}
+
+# add nutrients and dilute culture at regular time intervals
+event <- function(t, current, parms) {
+  current['R'] <- R_t0
+  current['N'] <- 0.01 * current['N']
+  current['S'] <- 0.01 * current['S']
+  current['Nmut'] <- 0.01 * current['Nmut']
   current['V'] <- 0.01 * current['V']
   return(current)
 }
@@ -324,5 +535,18 @@ ggplot(out.l, aes(x=time, y=Conc))+
   
 ```
 
-#Next
-## add spore-loss mutant without virus
+The sporulator is out-competed! Lets look at that plot in log scale:
+
+```{r}
+#plot
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  scale_y_log10()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params)),'=',paste(params), collapse = '; '),'\n',
+    paste0(paste(names(current)),'=',paste(current), collapse = '; ')))+
+  facet_grid(population~., scales = "free_y")
+  
+```
