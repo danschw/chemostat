@@ -27,8 +27,8 @@ Chaudhry, W. N., Pleška, M., Shah, N. N., Weiss, H., McCall, I. C., Meyer, J. R
 PLOS Biology, 16(8), e2005971. https://doi.org/10.1371/journal.pbio.2005971 
 
 # Simple model
-I will start with a model of serial transfer of a bacterium without sorulation and without phage. The model tracks changes in resouces (**R**) and bacteria (**N**). 
-According to Chandhury et al. growth dependence on resouces is given as a Monod function:
+I will start with a model of serial transfer of a bacterium without sporulation and without phage. The model tracks changes in resources (**R**) and bacteria (**N**). 
+According to Chandhury et al. growth dependence on resources is given as a Monod function:
 
 $$ \psi(R) =  \frac {R}{k+R}$$
  
@@ -132,7 +132,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
 ```
 
 #### Adding sporulation
-I need to add terms that will make sporulation (**s**) and germiation (**g**) sependent on **R**. I came up with the following functions:
+I need to add terms that will make sporulation (**s**) and germination (**g**) dependent on **R**. I came up with the following functions:
 
 
 $$ s(R)=2^{-R} $$
@@ -318,7 +318,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
   
 ```
 
-Under this transfer regime the sporulator is outcompeted. How about if we tranfer every 10 days?
+Under this transfer regime the sporulator is out competed. How about if we transfer every 10 days?
 
 ```{r}
 
@@ -347,7 +347,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
   facet_grid(population~., scales = "free_y")
   
 ```
-This enables the sporulator to out-compete the invader. Now the model captures the expected behaviour: sporulation is maintained when resource supply is infrequent. Lets see if the virus can help maintain sporulation when the resouce supply does not favor it (1 day transfers).
+This enables the sporulator to out-compete the invader. Now the model captures the expected behavior: sporulation is maintained when resource supply is infrequent. Lets see if the virus can help maintain sporulation when the resource supply does not favor it (1 day transfers).
 
 #### Adding a virus
 Using functions of Chaudury paper, but adding a mortality rate also for the virus. At first its the same mortality as the active cells.(m=`r m`)
@@ -535,7 +535,7 @@ ggplot(out.l, aes(x=time, y=Conc))+
   
 ```
 
-The sporulator is out-competed! Lets look at that plot in log scale:
+The sporulator is out competed! Lets look at that plot in log scale. The reason I do this is to make sure the the mutant is not surviving in infinitesimal numbers.
 
 ```{r}
 #plot
@@ -550,3 +550,364 @@ ggplot(out.l, aes(x=time, y=Conc))+
   facet_grid(population~., scales = "free_y")
   
 ```
+
+Except for the resources everything seems to fluctuating in reasonable numbers.
+
+## Critical length of transfer
+
+So far I have seen that in the absence of a virus the sporulator wins in 10-day transfers but loses in 1 day transfers. I now want to find the time length of transfers at which the system shifts from one outcome to the other. I will then ask if that transition point is influenced by the addition of the virus.
+```{r}
+#Define system of differential equations for resource and bacteria
+serial <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource (μg per mL)
+    dR =  -e *(R/(R+k))*v*(N+Nmut)  
+    
+    #N are the bacteria 
+    dN = (R/(R+k))*v*N +(R/(R+1))*S -(2^-R)*N -m*N
+   
+    #S are the spores 
+    dS = (2^-R)*N -(R/(R+1))*S
+    
+    #Nmut is the non-sporlator
+    #N are the bacteria 
+    dNmut = (R/(R+k))*v*Nmut -m*Nmut
+
+    results <- c(dR, dN, dS, dNmut )
+    return (list(results))
+  })
+}
+
+###define parameters
+N_t0 <- 100
+S_t0 <- 0
+current <- c(R = R_t0 , N = N_t0, S=S_t0, Nmut=1)
+
+
+
+# add nutrients and dilute culture at regular time intervals
+event <- function(t, current, parms) {
+  current['R'] <- R_t0
+  current['N'] <- 0.01 * current['N']
+  current['S'] <- 0.01 * current['S']
+  current['Nmut'] <- 0.01 * current['Nmut']
+  return(current)
+}
+
+#define the time to run model
+t <- seq (0, 1000, by=1)
+
+#start empty data frame to store results
+out.all <- data.frame( time=NA, population=NA, Conc=NA, t.transfer=NA)[FALSE,]
+
+times <- seq(24,240,24)
+for (i in times){
+  #deine time of transfer
+  t.transfer <-i
+  t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
+  
+  #run model
+  out <- lsoda(current, t, serial, params,
+               events = list(func = event, time=t.event))
+  
+  # transform to long format for ggplot
+  out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+  out.l$t.transfer <- t.transfer
+  #append results to data frame
+  out.all <- rbind(out.all,out.l)
+}
+
+
+
+#plot
+ggplot(out.all, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  # scale_y_log10()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle("different transfer times")+
+  facet_grid(t.transfer~population, scales = "free_y")
+```
+It looks like 3 days (72hrs) is the minimal transfer length that favors the sporulator. However the mutant does seem to e slightly rising towards the end. Lets look what happens to the mutant.
+```{r}
+ggplot(filter(out.all, t.transfer==72), aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  # scale_y_log10()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle("72 hour transfers")+
+  facet_grid(population~., scales = "free_y")
+```
+
+It appears that at 3 day transfers the mutant will win after all, it will just take a longer time than the model was run here. Lets run it longer.
+
+```{r}
+#define the time to run model
+t <- seq (0, 5000, by=1)
+
+
+#deine time of transfer
+t.transfer <-72
+t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
+
+#run model
+out <- lsoda(current, t, serial, params,
+             events = list(func = event, time=t.event))
+
+# transform to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+
+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  # scale_y_log10()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle("72 hour transfers")+
+  facet_grid(population~., scales = "free_y")
+```
+
+Indeed, the sporulator is lost! 
+Lets look just at Nmut across transfer times:
+```{r}
+ggplot(filter(out.all, population=='Nmut'), aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  # scale_y_log10()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle("different transfer times")+
+  facet_grid(t.transfer~population, scales = "free_y")
+```
+
+It can be seen that at the next transfer time (96hours) the mutant numbers decrease with every transfer. Lets refine that with respect to time
+
+```{r}
+#define the time to run model
+t <- seq (0, 1000, by=1)
+
+#start empty data frame to store results
+out.all <- data.frame( time=NA, population=NA, Conc=NA, t.transfer=NA)[FALSE,]
+
+times <- seq(72,96,4)
+for (i in times){
+  #deine time of transfer
+  t.transfer <-i
+  t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
+  
+  #run model
+  out <- lsoda(current, t, serial, params,
+               events = list(func = event, time=t.event))
+  
+  # transform to long format for ggplot
+  out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+  out.l$t.transfer <- t.transfer
+  #append results to data frame
+  out.all <- rbind(out.all,out.l)
+}
+
+mx <- max(out.all$Conc[out.all$t.transfer==96 & out.all$population=='Nmut'])
+#plot
+ggplot(filter(out.all, population=='Nmut'), aes(x=time, y=Conc))+
+  geom_hline(aes(yintercept = mx), color='red')+
+  geom_line(size=1)+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle("different transfer times")+
+  facet_grid(t.transfer~population)
+```
+
+The red line in all the plots above is at the same value (value of peak before first transfer) and is meant to aid see the overall pattern. The transition from Nmut increase to decrease occurs between transfer times of 80 and 84 hours.
+
+####Is this pattern altered by the addition of viruses?
+
+```{r}
+#Define system of differential equations for resource and bacteria
+serial <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource (μg per mL)
+    dR =  -e *(R/(R+k))*v*(N+Nmut)  
+    
+    #N are the bacteria 
+    dN = (R/(R+k))*v*N +(R/(R+1))*S -(2^-R)*N -a*(R/(R+k))*v*N  -m*N
+   
+    #S are the spores 
+    dS = (2^-R)*N -(R/(R+1))*S
+    
+    #Nmut is the non-sporulator
+    dNmut = (R/(R+k))*v*Nmut -a*(R/(R+k))*v*Nmut  -m*Nmut
+    
+    #V are the viruses 
+    dV = a*(R/(R+k))*v*(N+Nmut)*(b-1)-m*V
+
+    results <- c(dR, dN, dS, dNmut, dV )
+    return (list(results))
+  })
+}
+
+
+###define parameters
+#viral growth rate
+a <- .01
+#burst size
+b <- 60
+# all parameters together
+params <- c (v=v,e=e, k=k,m=m, a=a, b=b)
+
+###define parameters
+N_t0 <- 100
+S_t0 <- 0
+current <- c(R = R_t0 , N = N_t0, S=S_t0, Nmut=1, V=1)
+
+
+
+# add nutrients and dilute culture at regular time intervals
+event <- function(t, current, parms) {
+  current['R'] <- R_t0
+  current['N'] <- 0.01 * current['N']
+  current['S'] <- 0.01 * current['S']
+  current['Nmut'] <- 0.01 * current['Nmut']
+  current['V'] <- 0.01 * current['V']
+  return(current)
+}
+
+#define the time to run model
+t <- seq (0, 1000, by=1)
+
+#start empty data frame to store results
+out.all <- data.frame( time=NA, population=NA, Conc=NA, t.transfer=NA)[FALSE,]
+
+times <- seq(24,240,24)
+for (i in times){
+  #deine time of transfer
+  t.transfer <-i
+  t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
+  
+  #run model
+  out <- lsoda(current, t, serial, params,
+               events = list(func = event, time=t.event))
+  
+  # transform to long format for ggplot
+  out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+  out.l$t.transfer <- t.transfer
+  #append results to data frame
+  out.all <- rbind(out.all,out.l)
+}
+
+
+
+#plot
+ggplot(out.all, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  # scale_y_log10()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle("different transfer times")+
+  facet_grid(t.transfer~population, scales = "free_y")
+```
+
+It looks quite similar to the no virus case. Let's look at Nmut only:
+```{r}
+ggplot(filter(out.all, population=='Nmut'), aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle("different transfer times")+
+  facet_grid(t.transfer~population, scales = "free_y")
+```
+Indeed, this is the same as without the virus. Lets look at the refined transfer time resolution
+
+```{r}
+#define the time to run model
+t <- seq (0, 1000, by=1)
+
+#start empty data frame to store results
+out.all <- data.frame( time=NA, population=NA, Conc=NA, t.transfer=NA)[FALSE,]
+
+times <- seq(72,96,4)
+for (i in times){
+  #deine time of transfer
+  t.transfer <-i
+  t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
+  
+  #run model
+  out <- lsoda(current, t, serial, params,
+               events = list(func = event, time=t.event))
+  
+  # transform to long format for ggplot
+  out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+  out.l$t.transfer <- t.transfer
+  #append results to data frame
+  out.all <- rbind(out.all,out.l)
+}
+
+mx <- max(out.all$Conc[out.all$t.transfer==96 & out.all$population=='Nmut'])
+#plot
+ggplot(filter(out.all, population=='Nmut'), aes(x=time, y=Conc))+
+  geom_hline(aes(yintercept = mx), color='red')+
+  geom_line(size=1)+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle("different transfer times")+
+  facet_grid(t.transfer~population)
+```
+
+Even at this finer resolution I don't see any influence of the virus on the outcome of invasion of sporulators by non-sporulating mutant.
+
+What if we increase the selective pressure of viral infection?
+I will dial up the burst size 1000-fold to `r format(1000*b,  big.mark=",")`.
+
+```{r}
+# all parameters together
+params <- c (v=v,e=e, k=k,m=m, a=a, b=1000*b)
+
+#define the time to run model
+t <- seq (0, 1000, by=1)
+
+#start empty data frame to store results
+out.all <- data.frame( time=NA, population=NA, Conc=NA, t.transfer=NA)[FALSE,]
+
+times <- seq(72,96,4)
+for (i in times){
+  #deine time of transfer
+  t.transfer <-i
+  t.event <- t[t%%t.transfer==0][-1] #[-1] removes t=0
+  
+  #run model
+  out <- lsoda(current, t, serial, params,
+               events = list(func = event, time=t.event))
+  
+  # transform to long format for ggplot
+  out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+  out.l$t.transfer <- t.transfer
+  #append results to data frame
+  out.all <- rbind(out.all,out.l)
+}
+
+mx <- max(out.all$Conc[out.all$t.transfer==96 & out.all$population=='Nmut'])
+#plot
+ggplot(filter(out.all, population=='Nmut'), aes(x=time, y=Conc))+
+  geom_hline(aes(yintercept = mx), color='red')+
+  geom_line(size=1)+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle("different transfer times")+
+  facet_grid(t.transfer~population)
+```
+
+Still the same.
+
+```{r}
+#plot
+ggplot(out.all, aes(x=time, y=Conc))+
+  geom_line(size=1)+
+  theme_bw()+
+  # scale_y_log10()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle("different transfer times")+
+  facet_grid(population~t.transfer, scales = "free_y")
+```
+
+##Conclusion
+The presence of viruses has no impact on the out come of invasion of non-sporulator mutant into a population of sporulators. Spores do not offer a refuge.
