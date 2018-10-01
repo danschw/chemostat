@@ -1,0 +1,306 @@
+---
+title: "Post Lab Meeting"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+```{r, echo=FALSE}
+#setup chunk
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(inline = function(x) {
+  knitr:::format_sci(x, 'md')
+})
+#Clear environment
+rm(list=ls())
+pd=par()
+#Load necessary library
+library(deSolve)
+library(tidyverse)
+
+setwd("~/GitHub/chemostat/code/")
+```
+
+
+*28/Sep/2018*
+
+I presented the chemostat model for loss of sporulation in lab meeting. Here I want to address some ideas that came up during the meeting.
+
+#Invasion by mutant
+
+Roy asked whether the spo^-^ mutant would out compete also if it was introduced as a single cell rather than adding it theiugh a mutation parameter. I will try that here. First I need to get the model with the mutation parameter in here.
+
+```{r}
+chemostat1.mut <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * (N+Nmut) 
+    
+    #N are the sporulating bacteria 
+    dN <- mu * R * N - D * N - alpha * N + beta * S - theta * N
+    # Nmut are the spo- mutants
+    dNmut <- mu * R * Nmut - D*Nmut +theta * N
+    
+    #S are the spores 
+    dS <- alpha * N - beta * S - D*S
+    
+    
+    results <- c(dR, dN,dNmut, dS)
+    return (list(results))
+  })
+}
+# resource in inflow
+R_in <- 1e6
+#dilution rate
+D <- 0.1
+# growth rate
+mu <- D
+# probaility of sporulation
+alpha <- 0.01
+#probability of reactivation of spores
+beta <- 0.01
+
+#loss of sporulation by mutation
+theta <- 1e-6
+
+# all parameters together
+params1 <- c(R_in=R_in, D=D, mu=mu, alpha=alpha, beta=beta,theta=theta)
+#declare initial conditions for state variables
+current1 <- c(R = R_in, N = 1e2, Nmut=0, S=0)
+#define the time to run model
+t <- seq (0, 3000, by=1)
+
+#solve the model and save the output
+out <- lsoda(current1, t, chemostat1.mut, params1)
+# to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','Nmut'))
+#save for comparison with second model
+out.l_1 <- out.l
+out.l_1$model <- "spo-loss mutation term"
+
+# ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1)),'=',paste(params1), collapse = '; '),'\n',
+    paste0(paste(names(current1)),'=',paste(current1), collapse = '; ')))
+```
+
+Now I will modify it the way Roy suggested.
+
+```{r}
+chemostat1.inv <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * (N+Nmut) 
+    
+    #N are the sporulating bacteria 
+    dN <- mu * R * N - D * N - alpha * N + beta * S 
+    # Nmut are the spo- mutants
+    dNmut <- mu * R * Nmut - D*Nmut 
+    
+    #S are the spores 
+    dS <- alpha * N - beta * S - D*S
+    
+    
+    results <- c(dR, dN,dNmut, dS)
+    return (list(results))
+  })
+}
+
+# all parameters together with ou theta
+params1.inv <- c(R_in=R_in, D=D, mu=mu, alpha=alpha, beta=beta)
+#declare initial conditions for state variables
+current1.inv <- c(R = R_in, N = 1e2, Nmut=1, S=0) #added Nmut=1!
+#define the time to run model
+t <- seq (0, 3000, by=1)
+
+#solve the model and save the output
+out <- lsoda(current1.inv, t, chemostat1.inv, params1.inv)
+# to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','Nmut'))
+
+
+# ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1)),'=',paste(params1), collapse = '; '),'\n',
+    paste0(paste(names(current1)),'=',paste(current1), collapse = '; ')))
+```
+
+The Wt is out competed even quicker. I will plot them together.
+
+```{r}
+out.l$model <- "single mutant invades"
+#combine the output of the 2 models
+out.l <- rbind(out.l,out.l_1)
+
+#Plot together
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  facet_grid(model~.)
+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  # scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  facet_grid(model~.)
+```
+
+In the inasion model the sporulator is out-competed quicker! That is likely because it is introduced at t=0 with 1% frequency. I'll run both models again witn N at t=0 set to 10^6^. 
+
+``` {r}
+#modify initial conditions
+current1 <- c(R = R_in, N = 1e6, Nmut=0, S=0)
+current1.inv <- c(R = R_in, N = 1e6, Nmut=1, S=0)
+#solve the model and save the output
+out <- lsoda(current1, t, chemostat1.mut, params1)
+# to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','Nmut'))
+#save for comparison with second model
+out.l_1 <- out.l
+out.l_1$model <- "spo-loss mutation term"
+#solve the model and save the output
+out <- lsoda(current1.inv, t, chemostat1.inv, params1.inv)
+# to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S','Nmut'))
+
+out.l$model <- "single mutant invades"
+#combine the output of the 2 models
+out.l <- rbind(out.l,out.l_1)
+#Plot together
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  facet_grid(model~.)
+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  # scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  facet_grid(model~.)
+```
+
+Now it takes the invader longer to outcompete sporulator, but he does do so.
+
+# Strength of viral selection
+
+Another point raised by Roy in lab meeting was that perhaps if viral selection was greater than sporulation wpuld be sustained in the chemostat in face of mutant invasion. To tst this I will first add the virus into the mutant invasion model.
+
+```{r}
+chemostat1v.inv <- function(t,current,params){
+  with(as.list(c(params,current)), {
+    #list the equations for the derivatives of each state variable
+    #R is the resource
+    dR <- D * (R_in - R) - mu * R * (N+Nmut) 
+    
+    #N are the sporulating bacteria 
+    dN <- mu * R * N - D * N - alpha * N + beta * S - delta * N * V
+    # Nmut are the spo- mutants
+    dNmut <- mu * R * Nmut - D*Nmut - delta * Nmut * V
+    
+    #S are the spores 
+    dS <- alpha * N - beta * S - D*S
+    
+    #V are the phages
+    dV <- delta * (N+Nmut) * V * (phi-1) - D*V
+    
+    results <- c(dR, dN,dNmut,dS,dV)
+    return (list(results))
+  })
+}
+
+#adsorption constant rate (per hour per ml)
+delta <- 1e-8
+
+# busrt size
+phi <- 50
+
+# all parameters together with viral params
+params1v.inv <- c(R_in=R_in, D=D, mu=mu, alpha=alpha, beta=beta, delta=delta, phi=phi)
+#declare initial conditions for state variables
+current1v.inv <- c(R = R_in, N = 1e2, Nmut=1, S=0, V=1) #added Nmut=1!
+#define the time to run model
+t <- seq (0, 3000, by=1)
+
+#solve the model and save the output
+out <- lsoda(current1v.inv, t, chemostat1v.inv, params1v.inv)
+# to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S', 'V','Nmut'))
+
+
+# ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line(aes(color=population), size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  ggtitle(paste(
+    paste0(paste(names(params1v.inv)),'=',paste(params1v.inv), collapse = '; '),'\n',
+    paste0(paste(names(current1v.inv)),'=',paste(current1v.inv), collapse = '; ')))
+```
+
+I will now raise the phage load by increasing adsorption and burst size (100-fold each)
+
+```{r}
+# a variable to increase viral load
+vl <- 100
+#adsorption constant rate (per hour per ml)
+delta <- 1e-8*vl
+
+# busrt size
+phi <- 50*vl
+
+# all parameters together with viral params
+params1v.inv <- c(R_in=R_in, D=D, mu=mu, alpha=alpha, beta=beta, delta=delta, phi=phi)
+#declare initial conditions for state variables
+current1v.inv <- c(R = R_in, N = 1e6, Nmut=1, S=0, V=1) #added Nmut=1!
+#define the time to run model
+t <- seq (0, 5000, by=1)
+
+#solve the model and save the output
+out <- lsoda(current1v.inv, t, chemostat1v.inv, params1v.inv)
+# to long format for ggplot
+out.l <- gather(as.data.frame(out), key='population', value='Conc', colnames(out)[-1])
+out.l$population <- as.factor(out.l$population)
+out.l$population <-factor(out.l$population, levels = c('N', 'R', 'S', 'V','Nmut'))
+
+
+# ggplot(out.l[out.l$population!='R',], aes(x=time, y=Conc))+
+ggplot(out.l, aes(x=time, y=Conc))+
+  geom_line( size=2)+
+  scale_y_log10()+
+  theme_bw()+
+  scale_colour_brewer(palette='Set1')+
+  facet_grid(population~., scales = "free_y")+
+  ggtitle(paste(
+    paste0(paste(names(params1v.inv)),'=',paste(params1v.inv), collapse = '; '),'\n',
+    paste0(paste(names(current1v.inv)),'=',paste(current1v.inv), collapse = '; ')))
+```
+It takes a long time but ultimately the result is the same: sporulataor is outcompeted y mutant invader. And before that the sporulators and spores are found in lower levels due to increased viral killing
